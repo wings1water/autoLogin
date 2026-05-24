@@ -165,6 +165,22 @@ open_direct_port() {
   fi
 }
 
+wait_for_local_app() {
+  log "Checking local app health"
+  local url
+  url="http://127.0.0.1:${PORT}/login.html"
+
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+    if curl -fsS -o /dev/null "$url"; then
+      log "Local health check passed: ${url}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  die "Local health check failed. Check logs with: pm2 logs ${APP_NAME}"
+}
+
 write_nginx_config() {
   [ "$SETUP_NGINX" = "1" ] || return 0
 
@@ -249,15 +265,39 @@ EOF
   fi
 }
 
+detect_public_ip() {
+  if [ -n "${PUBLIC_IP:-}" ]; then
+    printf '%s\n' "$PUBLIC_IP"
+    return 0
+  fi
+
+  local ip
+  for url in \
+    https://api.ipify.org \
+    https://ifconfig.me/ip \
+    https://icanhazip.com
+  do
+    ip="$(curl -fsS --max-time 4 "$url" 2>/dev/null | tr -d '[:space:]' || true)"
+    if printf '%s' "$ip" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  done
+
+  printf 'YOUR_SERVER_IP\n'
+}
+
 print_result() {
-  local public_url
+  local public_url server_ip
   if [ "$SETUP_NGINX" = "1" ]; then
     public_url="http://${DOMAIN}"
     if [ "$DOMAIN" = "_" ]; then
-      public_url="http://YOUR_SERVER_IP"
+      server_ip="$(detect_public_ip)"
+      public_url="http://${server_ip}"
     fi
   else
-    public_url="http://YOUR_SERVER_IP:${PORT}"
+    server_ip="$(detect_public_ip)"
+    public_url="http://${server_ip}:${PORT}"
   fi
 
   cat <<EOF
@@ -295,6 +335,7 @@ main() {
   start_or_restart_pm2
   open_direct_port
   write_nginx_config
+  wait_for_local_app
   print_result
 }
 
