@@ -68,7 +68,7 @@ async function fetchEmails(account, options = {}) {
   const params = new URLSearchParams({
     $top: String(limit),
     $orderby: 'receivedDateTime desc',
-    $select: 'id,subject,from,receivedDateTime,bodyPreview,body,internetMessageId',
+    $select: 'id,subject,from,toRecipients,ccRecipients,bccRecipients,replyTo,receivedDateTime,bodyPreview,body,internetMessageId',
   });
 
   // 关键词搜索
@@ -105,6 +105,10 @@ async function fetchEmails(account, options = {}) {
     subject: msg.subject || '(无主题)',
     from: msg.from?.emailAddress?.address || '',
     fromName: msg.from?.emailAddress?.name || '',
+    to: normalizeGraphRecipients(msg.toRecipients),
+    cc: normalizeGraphRecipients(msg.ccRecipients),
+    bcc: normalizeGraphRecipients(msg.bccRecipients),
+    replyTo: normalizeGraphRecipients(msg.replyTo),
     date: msg.receivedDateTime || new Date().toISOString(),
     bodyText: stripHtml(msg.body?.content || ''),
     bodyPreview: msg.bodyPreview || '',
@@ -127,6 +131,13 @@ async function fetchEmails(account, options = {}) {
     count: filtered.length,
     protocol: 'graph',
   };
+}
+
+function normalizeGraphRecipients(recipients) {
+  return (recipients || []).map(r => ({
+    address: r.emailAddress?.address || '',
+    name: r.emailAddress?.name || '',
+  })).filter(r => r.address);
 }
 
 /**

@@ -31,6 +31,38 @@ It can import Outlook accounts, fetch OpenAI verification codes through IMAP or 
   - `outlook.office365.com`
   - `graph.microsoft.com`
 
+## One-command Install / Upgrade (Cloud Server)
+
+On an Ubuntu / Debian cloud server, run the same script for first install and future upgrades:
+
+```bash
+REPO_URL=https://github.com/<your-github-user>/<your-repo>.git bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
+```
+
+Run it again to upgrade. The script pulls the latest code, updates dependencies, restarts PM2, and preserves `data/accounts.json`.
+
+If you cloned someone else's repository, fork it or create your own repository first, then push your local changes there. Otherwise the server cannot download this script or your local changes.
+
+Common options:
+
+```bash
+REPO_URL=https://github.com/<your-github-user>/<your-repo>.git DOMAIN=your-domain.com PORT=3000 bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
+```
+
+Skip Nginx setup:
+
+```bash
+REPO_URL=https://github.com/<your-github-user>/<your-repo>.git SETUP_NGINX=0 bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
+```
+
+Nginx Basic Auth is enabled by default. You can set credentials:
+
+```bash
+REPO_URL=https://github.com/<your-github-user>/<your-repo>.git BASIC_AUTH_USER=admin BASIC_AUTH_PASS='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
+```
+
+> Important: this app stores mailbox tokens and ChatGPT sessions. Do not expose it publicly without authentication.
+
 ## Install
 
 ```bash
@@ -88,6 +120,16 @@ Use `direct` or `none` in `config.js` to disable proxy handling.
    ```text
    user@outlook.com----password----client-id----refresh-token
    ```
+
+   If ChatGPT logs in with an Outlook alias while verification mail still arrives in the primary mailbox, append the login email as a fifth field:
+
+   ```text
+   main@outlook.com----password----client-id----refresh-token----alias@outlook.com
+   ```
+
+   The first field is used for Outlook IMAP / Graph code fetching. The fifth field is submitted to ChatGPT as the login email.
+
+   If aliases follow the `email+alias@domain` pattern, you can import only the primary mailbox and click "扫描订阅邮件别名". The app searches mail with the subject `ChatGPT - Your new plan`, extracts addresses such as `main+xxx@outlook.com` from recipients and message content, and automatically creates matching `loginEmail` alias accounts.
 
 3. Go to the auto-login tab.
 4. Select accounts and choose a concurrency value.

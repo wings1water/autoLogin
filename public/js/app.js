@@ -120,21 +120,21 @@ function handleSSEEvent(data) {
       console.log('[SSE] 连接已建立');
       break;
     case 'login_start':
-      addLog(`${formatLoginEmail(data.email)} 开始登录${data.workerId ? ` #${data.workerId}` : ''}`, 'info');
+      addLog(`${formatLoginEmail(data)} 开始登录${data.workerId ? ` #${data.workerId}` : ''}`, 'info');
       if (typeof onLoginEvent === 'function') onLoginEvent(data);
       break;
     case 'login_status':
       if (shouldLogLoginStatus(data)) {
-        addLog(`${formatLoginEmail(data.email)} ${formatLoginStatus(data.status, data.detail)}`, loginStatusLogType(data.status));
+        addLog(`${formatLoginEmail(data)} ${formatLoginStatus(data.status, data.detail)}`, loginStatusLogType(data.status));
       }
       if (typeof onLoginEvent === 'function') onLoginEvent(data);
       break;
     case 'login_success':
-      addLog(`${formatLoginEmail(data.email)} 登录成功`, 'success');
+      addLog(`${formatLoginEmail(data)} 登录成功`, 'success');
       if (typeof onLoginEvent === 'function') onLoginEvent(data);
       break;
     case 'login_failed':
-      addLog(`${formatLoginEmail(data.email)} 登录失败: ${data.error}`, 'error');
+      addLog(`${formatLoginEmail(data)} 登录失败: ${data.error}`, 'error');
       if (typeof onLoginEvent === 'function') onLoginEvent(data);
       break;
     case 'login_progress':
@@ -147,8 +147,12 @@ function handleSSEEvent(data) {
   }
 }
 
-function formatLoginEmail(email) {
-  return email || '账号';
+function formatLoginEmail(data) {
+  const loginEmail = data?.loginEmail || data?.email || '账号';
+  const mailboxEmail = data?.mailboxEmail || '';
+  return mailboxEmail && mailboxEmail.toLowerCase() !== String(loginEmail).toLowerCase()
+    ? `${loginEmail} (收信: ${mailboxEmail})`
+    : loginEmail;
 }
 
 function shouldLogLoginStatus(data) {

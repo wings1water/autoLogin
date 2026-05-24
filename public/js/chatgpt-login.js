@@ -4,6 +4,75 @@
  */
 
 let _loginAccounts = [];
+let _loginGroupFilter = localStorage.getItem('loginGroupFilter') || 'actionable';
+
+const LOGIN_GROUP_LABELS = {
+  actionable: '待处理',
+  idle: '未登录',
+  retry: '需重登',
+  success: '已成功',
+  deactivated: '已停用',
+  all: '全部',
+};
+
+function getLoginEmail(account) {
+  return (account.loginEmail || account.email || '').trim();
+}
+
+function hasLoginAlias(account) {
+  const mailbox = (account.email || '').trim().toLowerCase();
+  const login = getLoginEmail(account).toLowerCase();
+  return Boolean(mailbox && login && mailbox !== login);
+}
+
+function formatLoginAccountTitle(account) {
+  return hasLoginAlias(account)
+    ? `收信邮箱: ${account.email}\nChatGPT 登录: ${getLoginEmail(account)}`
+    : account.email;
+}
+
+function getAccountLoginGroup(account) {
+  if (isAccountDeactivated(account)) return 'deactivated';
+  if (account.status === 'success') return 'success';
+  if (account.status === 'logging_in') return 'logging';
+  if (account.status === 'failed') return 'retry';
+  return 'idle';
+}
+
+function isActionableLoginAccount(account) {
+  const group = getAccountLoginGroup(account);
+  return group === 'idle' || group === 'retry';
+}
+
+function isVisibleInActionableGroup(account) {
+  const group = getAccountLoginGroup(account);
+  return group === 'idle' || group === 'retry' || group === 'logging';
+}
+
+function matchesLoginGroup(account, group = _loginGroupFilter) {
+  if (group === 'all') return true;
+  if (group === 'actionable') return isVisibleInActionableGroup(account);
+  return getAccountLoginGroup(account) === group;
+}
+
+function getVisibleLoginAccounts() {
+  return _loginAccounts.filter(account => matchesLoginGroup(account));
+}
+
+function setLoginGroupFilter(group, options = {}) {
+  if (!LOGIN_GROUP_LABELS[group]) group = 'actionable';
+  _loginGroupFilter = group;
+  localStorage.setItem('loginGroupFilter', group);
+  updateLoginGroupControls();
+  if (options.render !== false) renderLoginTable();
+}
+
+function getLoginGroupEmptyMessage() {
+  const label = LOGIN_GROUP_LABELS[_loginGroupFilter] || '当前分组';
+  if (_loginGroupFilter === 'deactivated') return '当前没有已停用账号';
+  if (_loginGroupFilter === 'actionable') return '当前没有待处理账号';
+  return `${label}分组暂无账号`;
+}
 
 // ==================== 渲染登录表格 ====================
 async function renderLoginTable() {
@@ -14,6 +83,7 @@ async function renderLoginTable() {
   } catch { _loginAccounts = []; }
 
   const tbody = document.getElementById('loginTableBody');
+  updateLoginGroupControls();
 
   if (_loginAccounts.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6">
@@ -27,29 +97,55 @@ async function renderLoginTable() {
     return;
   }
 
+  const visibleAccounts = getVisibleLoginAccounts();
+  if (visibleAccounts.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state" style="padding:52px 20px">
+        <p>${escapeHtml(getLoginGroupEmptyMessage())}</p>
+        <p class="text-muted">切换上方分组可以查看其他账号</p>
+      </div>
+    </td></tr>`;
+    updateLoginStats();
+    return;
+  }
+
   let html = '';
-  _loginAccounts.forEach(acc => {
+  visibleAccounts.forEach(acc => {
     const loginError = getLoginErrorInfo(acc);
-    const statusClass = acc.status === 'success' ? 'status-success'
-      : acc.status === 'failed' ? 'status-failed'
+    const loginEmail = getLoginEmail(acc);
+    const group = getAccountLoginGroup(acc);
+    const mailboxHtml = hasLoginAlias(acc)
+      ? `<div class="cell-mailbox">收信: ${escapeHtml(acc.email)}</div>`
+      : '';
+    const statusClass = group === 'success' ? 'status-success'
+      : group === 'deactivated' ? 'status-deactivated'
+      : group === 'retry' ? 'status-failed'
       : acc.status === 'logging_in' ? 'status-logging'
       : 'status-idle';
 
-    const statusText = acc.status === 'success' ? '成功'
-      : acc.status === 'failed' ? '失败'
+    const statusText = group === 'success' ? '成功'
+      : group === 'deactivated' ? '已停用'
+      : group === 'retry' ? '需重登'
       : acc.status === 'logging_in' ? '登录中'
       : '待登录';
 
     const spinner = acc.status === 'logging_in' ? '<span class="spinner-small"></span>' : '';
+    const loginDisabled = acc.status === 'logging_in' || group === 'deactivated';
+    const actionTitle = group === 'deactivated'
+      ? '账号已停用，已从登录队列中隔离'
+      : '登录该账号';
 
-    html += `<tr data-account-id="${acc.id}">
+    html += `<tr data-account-id="${acc.id}" data-login-group="${group}" class="${group === 'deactivated' ? 'login-row-deactivated' : ''}">
       <td><input type="checkbox" class="account-checkbox login-check" data-id="${acc.id}"/></td>
       <td><span class="status-cell ${statusClass}">${spinner} ${statusText}</span></td>
-      <td class="cell-email" title="${escapeAttr(acc.email)}">${escapeHtml(acc.email)}</td>
+      <td class="cell-email" title="${escapeAttr(formatLoginAccountTitle(acc))}">
+        <div class="cell-login-email">${escapeHtml(loginEmail)}</div>
+        ${mailboxHtml}
+      </td>
       <td>${acc.password ? '••••' : '-'}</td>
       <td class="cell-error ${loginError.type ? `error-${loginError.type}` : ''}" title="${escapeAttr(loginError.title)}">${escapeHtml(loginError.label)}</td>
       <td>
-        <button class="btn btn-ghost btn-small" onclick="loginSingle('${acc.id}')" ${acc.status === 'logging_in' ? 'disabled' : ''}>
+        <button class="btn btn-ghost btn-small" onclick="loginSingle('${acc.id}')" title="${escapeAttr(actionTitle)}" ${loginDisabled ? 'disabled' : ''}>
           ${acc.status === 'logging_in' ? '⏳' : '▶'}
         </button>
       </td>
@@ -67,13 +163,16 @@ function updateLoginStats() {
   const idle = _loginAccounts.filter(a => !a.status || a.status === 'idle').length;
   const logging = _loginAccounts.filter(a => a.status === 'logging_in').length;
   const success = _loginAccounts.filter(a => a.status === 'success').length;
-  const failed = _loginAccounts.filter(a => a.status === 'failed').length;
+  const failed = _loginAccounts.filter(a => a.status === 'failed' && !isAccountDeactivated(a)).length;
+  const deactivatedCount = _loginAccounts.filter(isAccountDeactivated).length;
+  const actionableCount = _loginAccounts.filter(isActionableLoginAccount).length;
 
   document.getElementById('statTotal').textContent = total;
   document.getElementById('statIdle').textContent = idle;
   document.getElementById('statLogging').textContent = logging;
   document.getElementById('statSuccess').textContent = success;
   document.getElementById('statFailed').textContent = failed;
+  document.getElementById('statDeactivated').textContent = deactivatedCount;
 
   // 更新按钮状态
   const hasSelected = document.querySelectorAll('.login-check:checked').length > 0;
@@ -81,6 +180,14 @@ function updateLoginStats() {
   document.getElementById('btnDeleteLoginSelected').disabled = !hasSelected;
   document.getElementById('btnRetryFailed').disabled = failed === 0;
   document.getElementById('btnExportSessions').disabled = success === 0;
+
+  const selectActionableBtn = document.getElementById('btnSelectActionable');
+  if (selectActionableBtn) {
+    selectActionableBtn.disabled = actionableCount === 0;
+    selectActionableBtn.textContent = actionableCount > 0
+      ? `选中待处理 (${actionableCount})`
+      : '选中待处理';
+  }
 
   const selectSuccessBtn = document.getElementById('btnSelectSuccess');
   if (selectSuccessBtn) {
@@ -90,7 +197,6 @@ function updateLoginStats() {
       : '选中成功账号';
   }
 
-  const deactivatedCount = _loginAccounts.filter(isAccountDeactivated).length;
   const selectDeactivatedBtn = document.getElementById('btnSelectDeactivated');
   if (selectDeactivatedBtn) {
     selectDeactivatedBtn.disabled = deactivatedCount === 0;
@@ -98,6 +204,8 @@ function updateLoginStats() {
       ? `选中已停用 (${deactivatedCount})`
       : '选中已停用';
   }
+
+  updateLoginGroupControls();
 }
 
 function bindLoginCheckboxes() {
@@ -117,6 +225,43 @@ function bindLoginCheckboxes() {
       }
       updateLoginStats();
     });
+  });
+}
+
+function getLoginGroupCounts() {
+  const idle = _loginAccounts.filter(a => getAccountLoginGroup(a) === 'idle').length;
+  const retry = _loginAccounts.filter(a => getAccountLoginGroup(a) === 'retry').length;
+  const success = _loginAccounts.filter(a => getAccountLoginGroup(a) === 'success').length;
+  const deactivated = _loginAccounts.filter(a => getAccountLoginGroup(a) === 'deactivated').length;
+
+  return {
+    all: _loginAccounts.length,
+    idle,
+    retry,
+    success,
+    deactivated,
+    actionable: idle + retry,
+  };
+}
+
+function updateLoginGroupControls() {
+  const counts = getLoginGroupCounts();
+  const ids = {
+    all: 'groupCountAll',
+    actionable: 'groupCountActionable',
+    idle: 'groupCountIdle',
+    retry: 'groupCountRetry',
+    success: 'groupCountSuccess',
+    deactivated: 'groupCountDeactivated',
+  };
+
+  Object.entries(ids).forEach(([group, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = counts[group] || 0;
+  });
+
+  document.querySelectorAll('.login-group-tab[data-login-group]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.loginGroup === _loginGroupFilter);
   });
 }
 
@@ -163,7 +308,12 @@ function updateLoginSelectAllState() {
   selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
 }
 
-function selectLoginAccountsByFilter(predicate, successMessage, emptyMessage) {
+async function selectLoginAccountsByFilter(predicate, successMessage, emptyMessage, groupFilter = null) {
+  if (groupFilter && groupFilter !== _loginGroupFilter) {
+    setLoginGroupFilter(groupFilter, { render: false });
+    await renderLoginTable();
+  }
+
   let count = 0;
   document.querySelectorAll('.login-check').forEach(cb => {
     const account = _loginAccounts.find(a => a.id === cb.dataset.id);
@@ -176,11 +326,21 @@ function selectLoginAccountsByFilter(predicate, successMessage, emptyMessage) {
   showToast(count > 0 ? successMessage(count) : emptyMessage, count > 0 ? 'info' : 'warning');
 }
 
+function selectActionableAccounts() {
+  selectLoginAccountsByFilter(
+    isActionableLoginAccount,
+    count => `已选中 ${count} 个待处理账号`,
+    '没有待处理账号',
+    'actionable'
+  );
+}
+
 function selectSuccessAccounts() {
   selectLoginAccountsByFilter(
     account => account.status === 'success',
     count => `已选中 ${count} 个登录成功账号`,
-    '没有登录成功账号'
+    '没有登录成功账号',
+    'success'
   );
 }
 
@@ -188,18 +348,29 @@ function selectDeactivatedAccounts() {
   selectLoginAccountsByFilter(
     isAccountDeactivated,
     count => `已选中 ${count} 个已停用账号`,
-    '没有已停用账号'
+    '没有已停用账号',
+    'deactivated'
   );
 }
 
 // ==================== 登录操作 ====================
 async function startLogin() {
-  const ids = [];
-  document.querySelectorAll('.login-check:checked').forEach(cb => ids.push(cb.dataset.id));
+  const selectedIds = getSelectedLoginAccountIds();
+  const selectedAccounts = selectedIds
+    .map(id => _loginAccounts.find(a => a.id === id))
+    .filter(Boolean);
+  const skippedDeactivated = selectedAccounts.filter(isAccountDeactivated).length;
+  const ids = selectedAccounts
+    .filter(account => !isAccountDeactivated(account) && account.status !== 'logging_in')
+    .map(account => account.id);
 
   if (ids.length === 0) {
-    showToast('请先选择要登录的账号', 'warning');
+    showToast(selectedIds.length > 0 ? '选中的账号均不可登录' : '请先选择要登录的账号', 'warning');
     return;
+  }
+
+  if (skippedDeactivated > 0) {
+    showToast(`已跳过 ${skippedDeactivated} 个已停用账号`, 'warning');
   }
 
   const concurrency = parseInt(document.getElementById('concurrencyInput').value) || 8;
@@ -218,6 +389,7 @@ async function startLogin() {
       body: JSON.stringify({ accountIds: ids, concurrency }),
     });
     const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || '登录任务启动失败');
     showToast(data.message || '登录任务已启动', 'info');
     addLog(`启动登录任务: ${ids.length} 个账号，并发 ${concurrency}`, 'info');
   } catch (err) {
@@ -226,6 +398,12 @@ async function startLogin() {
 }
 
 async function loginSingle(id) {
+  const account = _loginAccounts.find(a => a.id === id);
+  if (account && isAccountDeactivated(account)) {
+    showToast('账号已停用，已从登录队列中隔离', 'warning');
+    return;
+  }
+
   document.getElementById('loginProgress').style.display = 'block';
   document.getElementById('loginTotal2').textContent = '1';
   document.getElementById('loginCompleted').textContent = '0';
@@ -233,7 +411,9 @@ async function loginSingle(id) {
   document.getElementById('loginProgressFill').style.width = '0%';
 
   try {
-    await fetch(`/api/chatgpt/login/${id}`, { method: 'POST' });
+    const res = await fetch(`/api/chatgpt/login/${id}`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) throw new Error(data.error || '登录任务启动失败');
     addLog('启动单个账号登录', 'info');
   } catch (err) {
     showToast('登录失败: ' + err.message, 'error');
@@ -260,8 +440,8 @@ async function retryFailed() {
 
       document.getElementById('loginProgress').style.display = 'block';
       document.getElementById('loginTotal2').textContent = data.count;
-      showToast(`重试 ${data.count} 个失败账号`, 'info');
-      addLog(`重试 ${data.count} 个失败账号`, 'info');
+      showToast(`重试 ${data.count} 个需重登账号`, 'info');
+      addLog(`重试 ${data.count} 个需重登账号`, 'info');
     } else {
       showToast('没有需要重试的账号', 'info');
     }
@@ -294,8 +474,8 @@ function onLoginEvent(data) {
       break;
     case 'login_failed':
       const loginError = getLoginErrorInfo({ error: data.error, errorType: data.errorType });
-      statusCell.className = 'status-cell status-failed';
-      statusCell.textContent = '失败';
+      statusCell.className = `status-cell ${loginError.type === 'account-deactivated' ? 'status-deactivated' : 'status-failed'}`;
+      statusCell.textContent = loginError.type === 'account-deactivated' ? '已停用' : '需重登';
       row.querySelector('.cell-error').textContent = loginError.label || '未知错误';
       row.querySelector('.cell-error').title = loginError.title || data.error || '';
       row.querySelector('.cell-error').className = `cell-error ${loginError.type ? `error-${loginError.type}` : ''}`;
@@ -364,8 +544,14 @@ function getSelectedLoginAccountIds() {
 
 // ==================== 事件绑定 ====================
 document.addEventListener('DOMContentLoaded', () => {
+  updateLoginGroupControls();
+  document.querySelectorAll('.login-group-tab[data-login-group]').forEach(btn => {
+    btn.addEventListener('click', () => setLoginGroupFilter(btn.dataset.loginGroup));
+  });
+
   document.getElementById('btnLoginSelected').addEventListener('click', startLogin);
   document.getElementById('btnRetryFailed').addEventListener('click', retryFailed);
+  document.getElementById('btnSelectActionable').addEventListener('click', selectActionableAccounts);
   document.getElementById('btnSelectSuccess').addEventListener('click', selectSuccessAccounts);
   document.getElementById('btnSelectDeactivated').addEventListener('click', selectDeactivatedAccounts);
   document.getElementById('btnExportSessions').addEventListener('click', exportSessions);

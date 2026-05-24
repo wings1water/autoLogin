@@ -106,7 +106,8 @@ class ChatGPTProtocolLogin {
    */
   async login(account, fetchCodeFn, onStatus = () => {}) {
     const jar = new CookieJar();
-    const { email, password } = account;
+    const email = String(account.loginEmail || account.email || '').trim();
+    const { password } = account;
 
     try {
       // ====== Step 1: 获取 CSRF Token ======

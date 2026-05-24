@@ -33,12 +33,31 @@ function getAccountSearchKeyword() {
   return (document.getElementById('accountSearch')?.value || '').trim().toLowerCase();
 }
 
+function getAccountLoginEmail(account) {
+  return (account.loginEmail || account.email || '').trim();
+}
+
+function hasLoginAlias(account) {
+  const mailbox = (account.email || '').trim().toLowerCase();
+  const login = getAccountLoginEmail(account).toLowerCase();
+  return Boolean(mailbox && login && mailbox !== login);
+}
+
+function formatAccountTitle(account) {
+  return hasLoginAlias(account)
+    ? `收信邮箱: ${account.email}\nChatGPT 登录: ${getAccountLoginEmail(account)}`
+    : account.email;
+}
+
 // ==================== 渲染邮箱列表 ====================
 async function renderAccountList(highlightIds = null) {
   const accounts = await loadAccounts();
   const searchKeyword = getAccountSearchKeyword();
   const visible = searchKeyword
-    ? accounts.filter(a => (a.email || '').toLowerCase().includes(searchKeyword))
+    ? accounts.filter(a =>
+        (a.email || '').toLowerCase().includes(searchKeyword) ||
+        getAccountLoginEmail(a).toLowerCase().includes(searchKeyword)
+      )
     : accounts;
 
   const listEl = document.getElementById('accountList');
@@ -75,9 +94,16 @@ async function renderAccountList(highlightIds = null) {
 
   visible.forEach((acc, i) => {
     const isNew = highlightIds && highlightIds.has(acc.id);
+    const loginEmail = getAccountLoginEmail(acc);
+    const aliasHtml = hasLoginAlias(acc)
+      ? `<span class="account-login-email" title="${escapeAttr(loginEmail)}">ChatGPT: ${escapeHtml(loginEmail)}</span>`
+      : '';
     html += `<div class="account-item ${isNew ? 'account-item-new' : ''}" data-id="${acc.id}" style="animation-delay:${isNew ? i * 0.05 : 0}s">
       <input type="checkbox" class="account-checkbox account-check" data-id="${acc.id}" />
-      <span class="account-email" title="${escapeAttr(acc.email)}">${escapeHtml(acc.email)}</span>
+      <span class="account-email-wrap" title="${escapeAttr(formatAccountTitle(acc))}">
+        <span class="account-email">${escapeHtml(acc.email)}</span>
+        ${aliasHtml}
+      </span>
       <button class="account-copy" data-email="${escapeAttr(acc.email)}" title="复制邮箱">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       </button>
@@ -210,7 +236,165 @@ async function exportAccounts() {
   }
 }
 
+function getSelectedOrAllMailboxIds() {
+  const selected = getSelectedAccountIds();
+  if (selected.length > 0) return selected;
+  return _cachedAccounts
+    .filter(account => !hasLoginAlias(account))
+    .map(account => account.id);
+}
+
+function renderAliasDiscoveryResult(data) {
+  const el = document.getElementById('aliasDiscoveryResult');
+  if (!el) return;
+
+  const imported = data.importedAccounts || [];
+  const errors = data.errors || [];
+  const aliases = data.aliases || [];
+  const rows = imported.slice(0, 6).map(a => `
+    <div class="alias-result-row">
+      <span class="alias-mailbox">${escapeHtml(a.email)}</span>
+      <span class="alias-arrow">→</span>
+      <span class="alias-login">${escapeHtml(a.loginEmail)}</span>
+    </div>
+  `).join('');
+  const extra = imported.length > 6
+    ? `<div class="alias-result-muted">另有 ${imported.length - 6} 个别名已导入</div>`
+    : '';
+  const errorText = errors.length > 0
+    ? renderAliasDiscoveryErrors(errors)
+    : '';
+
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div class="alias-result-title">发现 ${aliases.length} 个别名，新增 ${imported.length} 个，跳过重复 ${data.duplicates || 0} 个</div>
+    ${rows || '<div class="alias-result-muted">没有新的别名账号需要导入</div>'}
+    ${extra}
+    ${errorText}
+  `;
+}
+
+function renderAliasDiscoveryErrors(errors) {
+  const groups = new Map();
+
+  for (const error of errors || []) {
+    const protocol = String(error.protocol || 'unknown').toUpperCase();
+    const reason = String(error.error || '未知错误');
+    const key = `${protocol}|${reason}`;
+    if (!groups.has(key)) {
+      groups.set(key, { protocol, reason, emails: [] });
+    }
+    groups.get(key).emails.push(error.email || '未知邮箱');
+  }
+
+  const rows = [...groups.values()].map(group => {
+    const emails = group.emails.slice(0, 5).map(escapeHtml).join('、');
+    const more = group.emails.length > 5 ? ` 等 ${group.emails.length} 个` : '';
+    return `<div class="alias-error-row">
+      <span class="alias-error-protocol">${escapeHtml(group.protocol)}</span>
+      <span class="alias-error-reason">${escapeHtml(group.reason)}</span>
+      <span class="alias-error-emails">${emails}${more}</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="alias-result-warning">
+    <div>${errors.length} 个邮箱扫描失败，可稍后重试</div>
+    <div class="alias-error-list">${rows}</div>
+  </div>`;
+}
+
+async function discoverAliasesFromPlanEmails() {
+  const ids = getSelectedOrAllMailboxIds();
+  if (ids.length === 0) {
+    showToast('请先导入至少一个主邮箱账号', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('btnDiscoverAliases');
+  setButtonLoading(btn, true);
+  setStatus('loading', '扫描别名中...');
+
+  try {
+    const res = await fetch('/api/accounts/discover-aliases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ids,
+        limit: 30,
+        subject: 'ChatGPT - Your new plan',
+        protocols: ['imap', 'graph'],
+        autoImport: true,
+      }),
+    });
+    const data = await res.json();
+    renderAliasDiscoveryResult(data);
+
+    if (data.success) {
+      if (data.imported > 0) {
+        showToast(`已从订阅邮件导入 ${data.imported} 个别名账号`, 'success', 5000);
+        addLog(`扫描订阅邮件：新增 ${data.imported} 个别名账号`, 'success');
+      } else {
+        showToast(data.discovered > 0 ? '发现的别名都已存在' : '没有发现新的订阅别名', 'info', 4000);
+        addLog(`扫描订阅邮件：发现 ${data.discovered || 0} 个别名，新增 0 个`, 'info');
+      }
+      await renderAccountList();
+      if (typeof renderLoginTable === 'function') renderLoginTable();
+    } else {
+      showToast(data.error || '扫描别名失败', 'warning', 5000);
+      addLog(`扫描订阅邮件失败: ${data.error || '未知错误'}`, 'warning');
+    }
+  } catch (err) {
+    showToast('扫描别名失败: ' + err.message, 'error', 5000);
+    addLog('扫描订阅邮件异常: ' + err.message, 'error');
+  } finally {
+    setStatus('ready', '就绪');
+    setButtonLoading(btn, false);
+  }
+}
+
 // ==================== 导入解析（客户端预览） ====================
+function isEmailLike(value) {
+  return String(value || '').trim().includes('@');
+}
+
+function parseImportLinePreview(trimmed) {
+  for (let dashCount = 4; dashCount >= 1; dashCount--) {
+    const sep = '-'.repeat(dashCount);
+    const rawParts = trimmed.split(sep).map(p => p.trim());
+    let parts = null;
+
+    if (rawParts.length === 4 && rawParts.every(p => p.length > 0)) {
+      parts = rawParts;
+    } else if (rawParts.length === 5 && rawParts.slice(0, 4).every(p => p.length > 0)) {
+      parts = isEmailLike(rawParts[4])
+        ? rawParts
+        : [rawParts[0], rawParts[1], rawParts[2], rawParts.slice(3).join(sep).trim()];
+    } else if (rawParts.length > 5) {
+      const lastPart = rawParts[rawParts.length - 1];
+      const hasLoginEmail = isEmailLike(lastPart);
+      const base = rawParts.slice(0, 3);
+      const refreshToken = rawParts.slice(3, hasLoginEmail ? -1 : undefined).join(sep).trim();
+
+      if (base.every(p => p.length > 0) && refreshToken) {
+        parts = hasLoginEmail
+          ? [...base, refreshToken, lastPart]
+          : [...base, refreshToken];
+      }
+    }
+
+    if (
+      parts &&
+      (parts.length === 4 || parts.length === 5) &&
+      parts.slice(0, 4).every(p => p.length > 0) &&
+      (!parts[4] || isEmailLike(parts[4]))
+    ) {
+      return parts;
+    }
+  }
+
+  return null;
+}
+
 function parseImportTextPreview(text) {
   const lines = text.trim().split('\n');
   const accounts = [];
@@ -220,34 +404,12 @@ function parseImportTextPreview(text) {
     const trimmed = line.trim();
     if (!trimmed) return;
 
-    let parts = null;
-    for (let dashCount = 4; dashCount >= 1; dashCount--) {
-      const sep = '-'.repeat(dashCount);
-      const testParts = trimmed.split(sep);
-      if (testParts.length === 4) {
-        const cleaned = testParts.map(p => p.trim());
-        if (cleaned.every(p => p.length > 0)) { parts = cleaned; break; }
-      }
-      if (testParts.length > 4) {
-        const cleaned = [];
-        let remaining = trimmed;
-        for (let i = 0; i < 3; i++) {
-          const idx = remaining.indexOf(sep);
-          if (idx === -1) break;
-          cleaned.push(remaining.substring(0, idx).trim());
-          remaining = remaining.substring(idx + sep.length);
-        }
-        if (cleaned.length === 3 && remaining.trim().length > 0) {
-          cleaned.push(remaining.trim());
-          parts = cleaned;
-          break;
-        }
-      }
-    }
+    const parts = parseImportLinePreview(trimmed);
 
-    if (!parts || parts.length !== 4) { errors.push(index); return; }
-    if (!parts[0].includes('@')) { errors.push(index); return; }
-    accounts.push({ email: parts[0] });
+    if (!parts || (parts.length !== 4 && parts.length !== 5)) { errors.push(index); return; }
+    if (!isEmailLike(parts[0])) { errors.push(index); return; }
+    if (parts[4] && !isEmailLike(parts[4])) { errors.push(index); return; }
+    accounts.push({ email: parts[0], loginEmail: parts[4] || '' });
   });
 
   return { accounts, errors, lines: lines.filter(l => l.trim()).length };
@@ -264,8 +426,10 @@ function updateImportPreview() {
   }
 
   const { accounts, errors, lines } = parseImportTextPreview(text);
+  const aliases = accounts.filter(a => a.loginEmail && a.loginEmail.toLowerCase() !== a.email.toLowerCase()).length;
   let html = `<span class="preview-count">📋 识别 ${lines} 行`;
   if (accounts.length > 0) html += ` → <span class="preview-valid">✅ ${accounts.length} 个有效</span>`;
+  if (aliases > 0) html += ` <span class="preview-alias">🔁 ${aliases} 个别名登录</span>`;
   if (errors.length > 0) html += ` <span class="preview-error">❌ ${errors.length} 个错误</span>`;
   html += '</span>';
   previewEl.innerHTML = html;
@@ -365,6 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 导出
   document.getElementById('btnExportAccounts').addEventListener('click', exportAccounts);
+  document.getElementById('btnDiscoverAliases')?.addEventListener('click', discoverAliasesFromPlanEmails);
 
   // 邮件详情弹窗关闭
   const emailDetailModal = document.getElementById('emailDetailModal');

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css?v=20260524-cpa-compatible">
+  <link rel="stylesheet" href="/css/style.css?v=20260524-login-groups">
 </head>
 <body>
   <!-- 动态背景 -->
@@ -87,6 +87,11 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               导出邮箱
             </button>
+            <button class="btn btn-ghost btn-full" id="btnDiscoverAliases">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/><path d="M11 8v6"/></svg>
+              扫描订阅邮件别名
+            </button>
+            <div class="alias-discovery-result" id="aliasDiscoveryResult" style="display:none;"></div>
           </div>
 
           <div class="account-list" id="accountList">
@@ -186,7 +191,16 @@
             <span>待登录 <span class="count-value" id="statIdle">0</span></span>
             <span>登录中 <span class="count-value" id="statLogging">0</span></span>
             <span style="color:var(--success)">成功 <span class="count-value" id="statSuccess">0</span></span>
-            <span style="color:var(--error)">失败 <span class="count-value" id="statFailed">0</span></span>
+            <span style="color:var(--error)">需重登 <span class="count-value" id="statFailed">0</span></span>
+            <span style="color:var(--warning)">已停用 <span class="count-value" id="statDeactivated">0</span></span>
+          </div>
+          <div class="login-group-tabs" id="loginGroupTabs">
+            <button class="login-group-tab active" data-login-group="actionable">待处理 <span id="groupCountActionable">0</span></button>
+            <button class="login-group-tab" data-login-group="idle">未登录 <span id="groupCountIdle">0</span></button>
+            <button class="login-group-tab" data-login-group="retry">需重登 <span id="groupCountRetry">0</span></button>
+            <button class="login-group-tab" data-login-group="success">已成功 <span id="groupCountSuccess">0</span></button>
+            <button class="login-group-tab group-deactivated" data-login-group="deactivated">已停用 <span id="groupCountDeactivated">0</span></button>
+            <button class="login-group-tab" data-login-group="all">全部 <span id="groupCountAll">0</span></button>
           </div>
           <div class="login-toolbar">
             <div class="concurrency-input">
@@ -194,7 +208,8 @@
               <input type="number" id="concurrencyInput" min="1" max="20" value="8" />
             </div>
             <button class="btn btn-primary" id="btnLoginSelected" disabled>▶ 登录选中</button>
-            <button class="btn btn-ghost" id="btnRetryFailed" disabled>↻ 重试失败</button>
+            <button class="btn btn-ghost" id="btnRetryFailed" disabled>↻ 重试需重登</button>
+            <button class="btn btn-ghost btn-small" id="btnSelectActionable" disabled>选中待处理</button>
             <button class="btn btn-ghost btn-small" id="btnSelectSuccess" disabled>选中成功账号</button>
             <button class="btn btn-ghost btn-small" id="btnSelectDeactivated" disabled>选中已停用</button>
             <div class="export-group">
@@ -316,9 +331,10 @@
         <button class="btn-close" id="btnCloseModal">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-tip">每行一个，格式：<code>账号----密码----clientid----刷新令牌</code></p>
+        <p class="modal-tip">每行一个，格式：<code>收信邮箱----密码----clientid----刷新令牌</code></p>
+        <p class="modal-tip text-muted">如 ChatGPT 使用别名登录，可追加第 5 段：<code>收信邮箱----密码----clientid----刷新令牌----ChatGPT登录邮箱</code></p>
         <p class="modal-tip text-muted">分隔符支持 1~4 个短横线（<code>-</code> 到 <code>----</code>）</p>
-        <textarea id="importTextarea" class="textarea" rows="10" placeholder="user@outlook.com----password123----client-id-here----refresh-token-here&#10;user2@outlook.com--pass--clientid--token"></textarea>
+        <textarea id="importTextarea" class="textarea" rows="10" placeholder="main@outlook.com----password123----client-id-here----refresh-token-here&#10;main@outlook.com----password123----client-id-here----refresh-token-here----alias@outlook.com"></textarea>
         <div id="importPreview" class="import-preview">
           <span class="preview-hint">💡 粘贴邮箱数据后将自动预览，支持 Ctrl+Enter 快捷导入</span>
         </div>
@@ -350,10 +366,10 @@
   <!-- Toast 通知 -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js?v=20260524-cpa-compatible"></script>
-  <script src="/js/accounts.js?v=20260524-cpa-compatible"></script>
-  <script src="/js/mail-fetcher.js?v=20260524-cpa-compatible"></script>
-  <script src="/js/chatgpt-login.js?v=20260524-cpa-compatible"></script>
-  <script src="/js/session-converter.js?v=20260524-cpa-compatible"></script>
+  <script src="/js/app.js?v=20260524-login-groups"></script>
+  <script src="/js/accounts.js?v=20260524-login-groups"></script>
+  <script src="/js/mail-fetcher.js?v=20260524-login-groups"></script>
+  <script src="/js/chatgpt-login.js?v=20260524-login-groups"></script>
+  <script src="/js/session-converter.js?v=20260524-login-groups"></script>
 </body>
 </html>

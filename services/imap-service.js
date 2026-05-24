@@ -74,6 +74,9 @@ async function fetchEmails(account, options = {}) {
     greetingTimeout: 10000,
     socketTimeout: 20000,
   });
+  client.on('error', err => {
+    console.warn(`[IMAP socket error] ${email}: ${err.message}`);
+  });
 
   try {
     await client.connect();
@@ -118,13 +121,17 @@ async function fetchEmails(account, options = {}) {
         uid: true,
         envelope: true,
         bodyStructure: true,
-      })) {
+      }, { uid: true })) {
         messages.push({
           uid: msg.uid,
           messageId: msg.envelope?.messageId || `imap-${msg.uid}`,
           subject: msg.envelope?.subject || '',
           from: msg.envelope?.from?.[0]?.address || '',
           fromName: msg.envelope?.from?.[0]?.name || '',
+          to: normalizeImapAddresses(msg.envelope?.to),
+          cc: normalizeImapAddresses(msg.envelope?.cc),
+          bcc: normalizeImapAddresses(msg.envelope?.bcc),
+          replyTo: normalizeImapAddresses(msg.envelope?.replyTo),
           date: msg.envelope?.date?.toISOString() || new Date().toISOString(),
           bodyText: '',
           bodyPreview: '',
@@ -140,7 +147,7 @@ async function fetchEmails(account, options = {}) {
           for await (const msg of client.fetch(bodyUids, {
             uid: true,
             bodyParts: [{ key: '1', size: 1024 }],
-          })) {
+          }, { uid: true })) {
             const target = messages.find(m => m.uid === msg.uid);
             if (target && msg.bodyParts) {
               const part = msg.bodyParts.get('1');
@@ -168,6 +175,13 @@ async function fetchEmails(account, options = {}) {
   } finally {
     await client.logout().catch(() => {});
   }
+}
+
+function normalizeImapAddresses(addresses) {
+  return (addresses || []).map(a => ({
+    address: a.address || '',
+    name: a.name || '',
+  })).filter(a => a.address);
 }
 
 module.exports = { fetchEmails, refreshAccessToken };

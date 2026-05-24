@@ -305,6 +305,63 @@ body {
 /* --- 邮箱列表 --- */
 .import-section { display: flex; flex-direction: column; gap: 8px; }
 
+.alias-discovery-result {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(14, 165, 233, 0.06);
+  border: 1px solid rgba(14, 165, 233, 0.12);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.alias-result-title {
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.alias-result-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 3px 0;
+}
+.alias-mailbox, .alias-login {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alias-login { color: var(--text-primary); font-weight: 600; }
+.alias-arrow, .alias-result-muted { color: var(--text-muted); }
+.alias-result-warning { color: #b45309; margin-top: 6px; font-weight: 600; }
+.alias-error-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.alias-error-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) minmax(180px, 2fr);
+  gap: 8px;
+  align-items: start;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.14);
+}
+.alias-error-protocol {
+  font-weight: 800;
+  color: #b45309;
+}
+.alias-error-reason {
+  color: #78350f;
+  font-weight: 700;
+  white-space: normal;
+}
+.alias-error-emails {
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
 .account-list {
   flex: 1; overflow-y: auto;
   display: flex; flex-direction: column;
@@ -356,9 +413,18 @@ body {
   transform: rotate(45deg);
 }
 
+.account-email-wrap {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+}
+
 .account-email {
   font-size: 0.85rem; color: var(--text-primary); flex: 1;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.account-login-email {
+  font-size: 0.7rem; color: var(--accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .account-copy, .account-delete { opacity: 0; transition: var(--transition-fast); flex-shrink: 0; }
@@ -490,6 +556,7 @@ body {
 .login-section { display: flex; flex-direction: column; gap: 12px; flex: 1; }
 
 .login-header {
+  display: flex; flex-direction: column; gap: 12px;
   padding: 16px 22px;
 }
 .login-stats {
@@ -498,6 +565,43 @@ body {
 }
 .login-stats span { white-space: nowrap; }
 .login-stats .count-value { font-weight: 700; color: var(--text-primary); }
+
+.login-group-tabs {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.login-group-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text-secondary);
+  font-family: inherit; font-size: 0.76rem; font-weight: 700;
+  cursor: pointer; transition: var(--transition);
+}
+.login-group-tab span {
+  min-width: 18px; padding: 1px 5px; border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--text-muted); text-align: center;
+  font-size: 0.68rem;
+}
+.login-group-tab:hover {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-primary);
+}
+.login-group-tab.active {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--accent);
+}
+.login-group-tab.active span {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent);
+}
+.login-group-tab.group-deactivated.active {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
 
 .login-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
@@ -553,7 +657,12 @@ body {
   text-transform: uppercase; letter-spacing: 0.5px;
 }
 .login-table tr:hover td { background: rgba(37, 99, 235, 0.02); }
-.login-table td.cell-email { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.login-table tr.login-row-deactivated td { background: rgba(245, 158, 11, 0.03); }
+.login-table tr.login-row-deactivated:hover td { background: rgba(245, 158, 11, 0.06); }
+.login-table td.cell-email { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.cell-login-email, .cell-mailbox { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-login-email { font-weight: 600; color: var(--text-primary); }
+.cell-mailbox { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
 .login-table td.cell-error { max-width: 180px; overflow: hidden; text-overflow: ellipsis; color: var(--error); font-size: 0.75rem; }
 .login-table td.cell-error.error-account-deactivated {
   color: #b45309;
@@ -569,6 +678,7 @@ body {
 .status-logging { background: var(--warning-bg); color: var(--warning); }
 .status-success { background: var(--success-bg); color: var(--success); }
 .status-failed { background: var(--error-bg); color: var(--error); }
+.status-deactivated { background: rgba(245, 158, 11, 0.12); color: #b45309; }
 
 .spinner-small {
   width: 12px; height: 12px;
@@ -735,6 +845,7 @@ body {
   color: var(--text-secondary);
 }
 .preview-valid { color: var(--success); }
+.preview-alias { color: var(--accent); }
 .preview-dup { color: var(--warning); }
 .preview-error { color: var(--error); }
 .preview-hint { color: var(--text-muted); }

@@ -34,6 +34,38 @@
   - `outlook.office365.com`
   - `graph.microsoft.com`
 
+## 一键安装 / 升级（云服务器）
+
+在 Ubuntu / Debian 云服务器上可以直接运行同一个脚本完成首次安装和后续升级：
+
+```bash
+REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
+```
+
+再次执行同一条命令就是升级：脚本会 `git pull`、更新依赖、重启 PM2，并保留 `data/accounts.json`。
+
+如果你是从别人的仓库 clone 的，请先 fork 或创建自己的仓库，并把当前修改推送到自己的仓库。否则服务器会拉不到这个一键脚本和你的本地改动。
+
+常用自定义参数：
+
+```bash
+REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git DOMAIN=your-domain.com PORT=3000 bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
+```
+
+如果只想开放端口、不配置 Nginx：
+
+```bash
+REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git SETUP_NGINX=0 bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
+```
+
+默认会给 Nginx 加 Basic Auth。可以指定账号密码：
+
+```bash
+REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git BASIC_AUTH_USER=admin BASIC_AUTH_PASS='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
+```
+
+> 重要：本项目会保存邮箱令牌和 ChatGPT session，不建议无密码公开到公网。
+
 ## 安装
 
 ```bash
@@ -89,6 +121,16 @@ HTTPS_PROXY=http://127.0.0.1:7897 npm start
    ```text
    user@outlook.com----password----client-id----refresh-token
    ```
+
+   如果 ChatGPT 使用 Outlook 别名邮箱登录，但验证码仍进入主邮箱，可以追加第 5 段登录邮箱：
+
+   ```text
+   main@outlook.com----password----client-id----refresh-token----alias@outlook.com
+   ```
+
+   其中第 1 段用于 Outlook IMAP / Graph 收取验证码，第 5 段用于提交给 ChatGPT 登录。
+
+   如果别名遵循 `email+别名@domain`，也可以只导入主邮箱，然后点击“扫描订阅邮件别名”。程序会搜索主题为 `ChatGPT - Your new plan` 的邮件，从收件人和邮件内容中提取 `main+xxx@outlook.com`，并自动新增对应的 `loginEmail` 别名账号。
 
 3. 进入“自动登录”页。
 4. 选择需要登录的账号，并设置并发数。

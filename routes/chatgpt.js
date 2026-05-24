@@ -1,6 +1,6 @@
 /**
- * ChatGPT 自动登录路由
- * 处理批量登录、状态推送、重试等
+ * ChatGPT auto-login routes.
+ * Login uses account.loginEmail when present; mailbox fetching still uses account.email.
  */
 
 const router = require('express').Router();
@@ -10,6 +10,7 @@ const config = require('../config');
 const chatgptService = require('../services/chatgpt-service');
 const imapService = require('../services/imap-service');
 const graphService = require('../services/graph-service');
+const verificationMailFilter = require('../services/verification-mail-filter');
 
 const DATA_FILE = path.resolve(__dirname, '..', config.dataFile);
 
@@ -53,34 +54,47 @@ function normalizeLoginError(error) {
   };
 }
 
-/**
- * 获取验证码的函数
- * 同时尝试 IMAP 和 Graph 两种协议
- */
+function isAccountDeactivated(account) {
+  const message = String(account?.error || '').toLowerCase();
+  return (
+    account?.errorType === 'account_deactivated' ||
+    message.includes('account_deactivated') ||
+    message.includes('deleted or deactivated') ||
+    message.includes('账号已停用')
+  );
+}
+
+function getLoginEmail(account) {
+  return String(account.loginEmail || account.email || '').trim();
+}
+
+function loginEventBase(account) {
+  const loginEmail = getLoginEmail(account);
+  return {
+    accountId: account.id,
+    email: loginEmail,
+    loginEmail,
+    mailboxEmail: account.email,
+  };
+}
+
 async function fetchVerificationCode(account) {
   const options = {
     keyword: 'OpenAI',
     sender: '',
-    limit: 5,
+    limit: 30,
   };
 
-  const promises = [];
-
-  // IMAP
-  promises.push(
+  const promises = [
     imapService.fetchEmails(account, options).catch(err => {
-      console.error(`[IMAP 取码失败] ${account.email}:`, err.message);
+      console.error(`[IMAP code fetch failed] ${account.email}:`, err.message);
       return { success: false, emails: [] };
-    })
-  );
-
-  // Graph
-  promises.push(
+    }),
     graphService.fetchEmails(account, options).catch(err => {
-      console.error(`[Graph 取码失败] ${account.email}:`, err.message);
+      console.error(`[Graph code fetch failed] ${account.email}:`, err.message);
       return { success: false, emails: [] };
-    })
-  );
+    }),
+  ];
 
   const results = await Promise.all(promises);
   const allEmails = [];
@@ -90,12 +104,9 @@ async function fetchVerificationCode(account) {
     }
   }
 
-  return allEmails;
+  return verificationMailFilter.filterEmailsForAccount(account, allEmails);
 }
 
-/**
- * POST /api/chatgpt/login - 批量登录
- */
 router.post('/chatgpt/login', async (req, res) => {
   const { accountIds, concurrency } = req.body;
 
@@ -111,33 +122,36 @@ router.post('/chatgpt/login', async (req, res) => {
 
   const broadcast = req.app.get('broadcast');
   const accounts = readAccounts();
-  const toLogin = accounts.filter(a => accountIds.includes(a.id));
+  const requestedAccounts = accounts.filter(a => accountIds.includes(a.id));
+  const toLogin = requestedAccounts.filter(a => !isAccountDeactivated(a));
+  const skippedDeactivated = requestedAccounts.length - toLogin.length;
 
-  if (toLogin.length === 0) {
+  if (requestedAccounts.length === 0) {
     return res.status(404).json({ success: false, error: '未找到指定的账号' });
   }
 
-  // 立即返回，后台执行登录
+  if (toLogin.length === 0) {
+    return res.status(400).json({ success: false, error: '选中的账号均已停用，已跳过登录' });
+  }
+
   res.json({
     success: true,
-    message: `登录任务已启动，共 ${toLogin.length} 个账号，并发 ${Math.min(requestedConcurrency, toLogin.length)}`,
+    message: `登录任务已启动，共 ${toLogin.length} 个账号，并发 ${Math.min(requestedConcurrency, toLogin.length)}${skippedDeactivated ? `，已跳过 ${skippedDeactivated} 个已停用账号` : ''}`,
     count: toLogin.length,
     concurrency: Math.min(requestedConcurrency, toLogin.length),
+    skippedDeactivated,
   });
 
-  // 后台执行批量登录
   (async () => {
     let completed = 0;
     let succeeded = 0;
     let nextIndex = 0;
 
     async function runOne(account, workerId) {
-      // 更新状态为登录中
       updateAccountStatus(account.id, { status: 'logging_in', error: null, errorType: null });
       broadcast({
         type: 'login_start',
-        accountId: account.id,
-        email: account.email,
+        ...loginEventBase(account),
         workerId,
       });
 
@@ -148,16 +162,14 @@ router.post('/chatgpt/login', async (req, res) => {
           (status, detail) => {
             broadcast({
               type: 'login_status',
-              accountId: account.id,
+              ...loginEventBase(account),
               status,
               detail,
-              email: account.email,
               workerId,
             });
           }
         );
 
-        // 登录成功
         updateAccountStatus(account.id, {
           status: 'success',
           session,
@@ -168,13 +180,11 @@ router.post('/chatgpt/login', async (req, res) => {
         succeeded++;
         broadcast({
           type: 'login_success',
-          accountId: account.id,
-          email: account.email,
+          ...loginEventBase(account),
         });
       } catch (err) {
         const loginError = normalizeLoginError(err.message);
 
-        // 登录失败
         updateAccountStatus(account.id, {
           status: 'failed',
           error: loginError.message,
@@ -183,8 +193,7 @@ router.post('/chatgpt/login', async (req, res) => {
 
         broadcast({
           type: 'login_failed',
-          accountId: account.id,
-          email: account.email,
+          ...loginEventBase(account),
           error: loginError.message,
           errorType: loginError.type,
         });
@@ -217,7 +226,7 @@ router.post('/chatgpt/login', async (req, res) => {
       failed: toLogin.length - succeeded,
     });
   })().catch(err => {
-    console.error('[批量登录任务异常]', err);
+    console.error('[Batch login job failed]', err);
     broadcast({
       type: 'login_complete',
       total: toLogin.length,
@@ -228,9 +237,6 @@ router.post('/chatgpt/login', async (req, res) => {
   });
 });
 
-/**
- * POST /api/chatgpt/login/:id - 单个账号登录
- */
 router.post('/chatgpt/login/:id', async (req, res) => {
   const accounts = readAccounts();
   const account = accounts.find(a => a.id === req.params.id);
@@ -239,15 +245,17 @@ router.post('/chatgpt/login/:id', async (req, res) => {
     return res.status(404).json({ success: false, error: '账号不存在' });
   }
 
+  if (isAccountDeactivated(account)) {
+    return res.status(400).json({ success: false, error: '账号已停用，已从登录队列中隔离' });
+  }
+
   const broadcast = req.app.get('broadcast');
 
-  // 立即返回
   res.json({ success: true, message: '登录任务已启动' });
 
-  // 后台执行
   (async () => {
     updateAccountStatus(account.id, { status: 'logging_in', error: null, errorType: null });
-    broadcast({ type: 'login_start', accountId: account.id, email: account.email });
+    broadcast({ type: 'login_start', ...loginEventBase(account) });
 
     let succeeded = 0;
     try {
@@ -255,49 +263,50 @@ router.post('/chatgpt/login/:id', async (req, res) => {
         account,
         fetchVerificationCode,
         (status, detail) => {
-          broadcast({ type: 'login_status', accountId: account.id, email: account.email, status, detail });
+          broadcast({ type: 'login_status', ...loginEventBase(account), status, detail });
         }
       );
 
       updateAccountStatus(account.id, { status: 'success', session, error: null, errorType: null });
-      broadcast({ type: 'login_success', accountId: account.id, email: account.email });
+      broadcast({ type: 'login_success', ...loginEventBase(account) });
       succeeded = 1;
     } catch (err) {
       const loginError = normalizeLoginError(err.message);
       updateAccountStatus(account.id, { status: 'failed', error: loginError.message, errorType: loginError.type });
-      broadcast({ type: 'login_failed', accountId: account.id, email: account.email, error: loginError.message, errorType: loginError.type });
+      broadcast({
+        type: 'login_failed',
+        ...loginEventBase(account),
+        error: loginError.message,
+        errorType: loginError.type,
+      });
     }
 
     broadcast({ type: 'login_progress', completed: 1, total: 1, succeeded });
   })();
 });
 
-/**
- * POST /api/chatgpt/retry-failed - 重试所有失败的账号
- */
 router.post('/chatgpt/retry-failed', (req, res) => {
   const accounts = readAccounts();
-  const failed = accounts.filter(a => a.status === 'failed');
+  const failed = accounts.filter(a => a.status === 'failed' && !isAccountDeactivated(a));
+  const skippedDeactivated = accounts.filter(a => a.status === 'failed' && isAccountDeactivated(a)).length;
 
   if (failed.length === 0) {
-    return res.json({ success: false, error: '没有失败的账号需要重试' });
+    return res.json({
+      success: false,
+      error: skippedDeactivated ? '没有可重试的失败账号，已停用账号会被跳过' : '没有失败的账号需要重试',
+      skippedDeactivated,
+    });
   }
 
-  // 触发登录逻辑（复用 login 路由的 body）
-  req.body = { accountIds: failed.map(a => a.id), concurrency: req.body.concurrency };
-
-  // 由前端再调 /api/chatgpt/login 接口
   res.json({
     success: true,
     accountIds: failed.map(a => a.id),
     count: failed.length,
-    message: `找到 ${failed.length} 个失败账号`,
+    skippedDeactivated,
+    message: `找到 ${failed.length} 个需重登账号${skippedDeactivated ? `，已跳过 ${skippedDeactivated} 个已停用账号` : ''}`,
   });
 });
 
-/**
- * GET /api/chatgpt/sessions - 获取所有成功的 session
- */
 router.get('/chatgpt/sessions', (req, res) => {
   const accounts = readAccounts();
   const sessions = accounts
@@ -305,6 +314,8 @@ router.get('/chatgpt/sessions', (req, res) => {
     .map(a => ({
       id: a.id,
       email: a.email,
+      loginEmail: getLoginEmail(a),
+      mailboxEmail: a.email,
       session: a.session,
     }));
 
