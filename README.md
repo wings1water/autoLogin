@@ -1,113 +1,104 @@
 # ChatGPT Session Forge
 
-A local web app for managing Outlook-based ChatGPT login workflows and exporting usable session credentials.
+[English](README.en.md)
 
-It can import Outlook accounts, fetch OpenAI verification codes through IMAP or Microsoft Graph, run batch ChatGPT login jobs with configurable concurrency, and export successful sessions as CPA or sub2api-compatible JSON.
+一个本地运行的 ChatGPT 会话管理工具，用于导入 Outlook 账号、自动获取 OpenAI 邮箱验证码、批量完成 ChatGPT 登录，并导出 CPA / sub2api 可用的凭证 JSON。
 
-## Features
+这个项目适合需要集中管理多个 ChatGPT Web Session 的本地工作流。所有账号数据、登录结果和导出文件都保存在本机，不需要外部数据库。
 
-- Outlook account import in `email----password----clientId----refreshToken` format
-- Dual mailbox fetching with IMAP and Microsoft Graph
-- Batch ChatGPT login with configurable concurrency
-- Live login status and log stream through SSE
-- Account status tracking, including deactivated account detection
-- CPA export as one JSON file per account
-- sub2api export in grouped JSON format
-- Session converter for raw `https://chatgpt.com/api/auth/session` JSON
-- Optional outbound proxy support through environment variables or Windows proxy auto-detection
+## 功能特性
 
-## Project Name
+- 支持批量导入 Outlook 账号
+- 支持 IMAP 与 Microsoft Graph 双协议取件
+- 自动从邮箱中提取 OpenAI 验证码
+- 支持批量 ChatGPT 登录，并可设置并发数
+- 登录进度、状态和日志实时刷新
+- 自动识别账号停用 / 删除类错误
+- CPA 导出：一个账号一个 JSON 文件
+- sub2api 导出：生成包含 `accounts` 数组的聚合 JSON
+- 支持粘贴原始 `https://chatgpt.com/api/auth/session` JSON 并转换
+- 支持通过环境变量或 Windows 系统代理配置后端出站代理
 
-Recommended repository name:
+## 环境要求
 
-```text
-chatgpt-session-forge
-```
-
-The name is meant to describe the main purpose clearly: turning login sessions into usable credential files.
-
-## Requirements
-
-- Node.js 18 or newer
-- Outlook account OAuth data:
-  - email
-  - password
-  - Microsoft OAuth client ID
-  - refresh token
-- Network access to:
+- Node.js 18 或更高版本
+- Outlook 账号 OAuth 数据：
+  - 邮箱
+  - 密码
+  - Microsoft OAuth Client ID
+  - Refresh Token
+- 可以访问以下服务：
   - `chatgpt.com`
   - `auth.openai.com`
   - `outlook.office365.com`
   - `graph.microsoft.com`
 
-## Install
+## 安装
 
 ```bash
 npm install
 ```
 
-## Run
+## 启动
 
 ```bash
 npm start
 ```
 
-Then open:
+然后打开：
 
 ```text
 http://localhost:3000
 ```
 
-The default port is `3000`. You can override it:
+默认端口是 `3000`。也可以指定端口：
 
 ```bash
 PORT=8080 npm start
 ```
 
-On Windows PowerShell:
+Windows PowerShell：
 
 ```powershell
 $env:PORT = "8080"
 npm start
 ```
 
-## Proxy
+## 代理配置
 
-The backend uses `undici` for outbound requests. Proxy selection is controlled by `config.js`.
-
-By default, the app tries to read the current Windows user proxy:
+后端出站请求使用 `undici`，代理配置在 `config.js` 中：
 
 ```js
 proxy: process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY || 'auto'
 ```
 
-You can also set it manually:
+默认值 `auto` 会尝试读取 Windows 当前用户代理。也可以手动指定：
 
 ```bash
 HTTPS_PROXY=http://127.0.0.1:7897 npm start
 ```
 
-Use `direct` or `none` in `config.js` to disable proxy handling.
+如果不想使用代理，可以在 `config.js` 中设置为 `direct` 或 `none`。
 
-## Usage
+## 使用方法
 
-1. Open the web UI.
-2. Import Outlook accounts with this format:
+1. 打开 Web UI。
+2. 在“邮箱取件”页导入 Outlook 账号，格式如下：
 
    ```text
    user@outlook.com----password----client-id----refresh-token
    ```
 
-3. Go to the auto-login tab.
-4. Select accounts and choose a concurrency value.
-5. Start login.
-6. After login succeeds, select successful accounts and export:
-   - `CPA`: one JSON file per account
-   - `sub2api`: grouped JSON with an `accounts` array
+3. 进入“自动登录”页。
+4. 选择需要登录的账号，并设置并发数。
+5. 点击登录。
+6. 登录成功后，选择成功账号并导出：
+   - `CPA`：每个账号导出为一个 JSON 文件
+   - `sub2api`：导出为一个聚合 JSON 文件
 
-## CPA Export
+## CPA 导出格式
 
-CPA export is intentionally written as one account per JSON file. The exported object uses this shape:
+CPA 导出采用“一个账号一个 JSON 文件”的形式。结构示例：
 
 ```json
 {
@@ -128,11 +119,11 @@ CPA export is intentionally written as one account per JSON file. The exported o
 }
 ```
 
-The app derives this from the ChatGPT web session response and the access token claims. It does not log out after a successful login, because logging out can invalidate the access token.
+该格式由 ChatGPT Web Session 和 access token claims 派生生成。登录成功后程序不会主动退出 ChatGPT，因为退出可能导致 access token 失效。
 
-## sub2api Export
+## sub2api 导出格式
 
-sub2api export creates a grouped file:
+sub2api 导出为聚合结构：
 
 ```json
 {
@@ -142,83 +133,54 @@ sub2api export creates a grouped file:
 }
 ```
 
-Each account includes OAuth credentials, account ID, user ID, plan type, expiry, and metadata.
+每个账号会包含 OAuth 凭证、账号 ID、用户 ID、套餐类型、过期时间和额外元数据。
 
-## Data Storage
+## 本地数据
 
-Runtime account data is stored locally in:
+运行时账号数据保存在：
 
 ```text
 data/accounts.json
 ```
 
-Logs are stored in:
+日志保存在：
 
 ```text
 logs/
 ```
 
-Both paths are ignored by Git.
+这两个路径都已加入 `.gitignore`，不会被提交到仓库。
 
-## Security Notes
+## 安全提醒
 
-This project handles highly sensitive data:
+本项目会处理高度敏感的数据：
 
-- Outlook passwords
-- OAuth refresh tokens
-- ChatGPT access tokens
-- ChatGPT session tokens
-- exported CPA/sub2api credential files
+- Outlook 密码
+- OAuth refresh token
+- ChatGPT access token
+- ChatGPT session token
+- 导出的 CPA / sub2api 凭证文件
 
-Do not commit runtime data, logs, exported JSON, exported ZIP files, or screenshots that contain tokens. The included `.gitignore` excludes the common sensitive paths, but review `git status` before pushing.
-
-Recommended check before publishing:
+不要提交运行数据、日志、导出的 JSON / ZIP 文件，或任何包含 token 的截图。公开仓库前请务必检查：
 
 ```bash
 git status --ignored
 ```
 
-## Repository Hygiene
-
-Before uploading to GitHub:
-
-```bash
-git init
-git add package.json package-lock.json server.js config.js routes services public README.md .gitignore
-git status
-```
-
-Confirm that these are not staged:
-
-```text
-data/
-logs/
-node_modules/
-codex-*.json
-sessions-*.json
-sessions-*.zip
-```
-
-Then commit:
-
-```bash
-git commit -m "Initial commit"
-```
-
-## Scripts
+## 脚本
 
 ```bash
 npm start
 ```
 
-Starts the Express server.
+启动 Express 服务。
 
 ```bash
 npm run dev
 ```
 
-Starts the server with Node watch mode.
+使用 Node watch mode 启动开发模式。
 
-## License
+## 许可证
 
-No license has been selected yet. Add one before publishing if you want others to reuse or modify the project.
+当前暂未选择许可证。如果你希望其他人复用或修改该项目，请在公开发布前添加合适的开源许可证。
