@@ -181,6 +181,27 @@ wait_for_local_app() {
   die "Local health check failed. Check logs with: pm2 logs ${APP_NAME}"
 }
 
+print_listen_status() {
+  log "Checking port ${PORT} listener"
+
+  if need_cmd ss; then
+    ss -lntp 2>/dev/null | grep -E "[:.]${PORT}[[:space:]]" || true
+    return 0
+  fi
+
+  if need_cmd netstat; then
+    netstat -lntp 2>/dev/null | grep -E "[:.]${PORT}[[:space:]]" || true
+    return 0
+  fi
+
+  if need_cmd lsof; then
+    lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null || true
+    return 0
+  fi
+
+  log "No ss/netstat/lsof command found; skipped listener details"
+}
+
 write_nginx_config() {
   [ "$SETUP_NGINX" = "1" ] || return 0
 
@@ -336,6 +357,7 @@ main() {
   open_direct_port
   write_nginx_config
   wait_for_local_app
+  print_listen_status
   print_result
 }
 
