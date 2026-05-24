@@ -5,6 +5,7 @@
 
 // ==================== 数据操作 ====================
 let _cachedAccounts = [];
+let _accountGroupFilter = 'all';
 
 async function loadAccounts() {
   try {
@@ -43,28 +44,71 @@ function hasLoginAlias(account) {
   return Boolean(mailbox && login && mailbox !== login);
 }
 
+function getAccountGroup(account) {
+  return hasLoginAlias(account) ? 'alias' : 'primary';
+}
+
+function getAccountGroupLabel(group = _accountGroupFilter) {
+  const labels = {
+    all: '全部邮箱',
+    primary: '主邮箱',
+    alias: '别名邮箱',
+  };
+  return labels[group] || labels.all;
+}
+
+function accountMatchesCurrentGroup(account) {
+  return _accountGroupFilter === 'all' || getAccountGroup(account) === _accountGroupFilter;
+}
+
 function formatAccountTitle(account) {
   return hasLoginAlias(account)
     ? `收信邮箱: ${account.email}\nChatGPT 登录: ${getAccountLoginEmail(account)}`
     : account.email;
 }
 
+function getFilteredAccounts(accounts = _cachedAccounts) {
+  const searchKeyword = getAccountSearchKeyword();
+  return accounts.filter(a => {
+    if (!accountMatchesCurrentGroup(a)) return false;
+    if (!searchKeyword) return true;
+    return (
+      (a.email || '').toLowerCase().includes(searchKeyword) ||
+      getAccountLoginEmail(a).toLowerCase().includes(searchKeyword)
+    );
+  });
+}
+
+function updateAccountGroupTabs(accounts = _cachedAccounts) {
+  const all = accounts.length;
+  const alias = accounts.filter(hasLoginAlias).length;
+  const primary = all - alias;
+  const counts = { all, primary, alias };
+
+  for (const [group, count] of Object.entries(counts)) {
+    const el = document.getElementById(`accountGroup${group[0].toUpperCase()}${group.slice(1)}`);
+    if (el) el.textContent = count;
+  }
+
+  document.querySelectorAll('.account-group-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.accountGroup === _accountGroupFilter);
+  });
+}
+
 // ==================== 渲染邮箱列表 ====================
 async function renderAccountList(highlightIds = null) {
   const accounts = await loadAccounts();
   const searchKeyword = getAccountSearchKeyword();
-  const visible = searchKeyword
-    ? accounts.filter(a =>
-        (a.email || '').toLowerCase().includes(searchKeyword) ||
-        getAccountLoginEmail(a).toLowerCase().includes(searchKeyword)
-      )
-    : accounts;
+  const visible = getFilteredAccounts(accounts);
 
   const listEl = document.getElementById('accountList');
   const countEl = document.getElementById('accountCount');
+  updateAccountGroupTabs(accounts);
 
   const oldCount = parseInt(countEl.textContent) || 0;
-  countEl.textContent = searchKeyword ? `${visible.length}/${accounts.length}` : accounts.length;
+  countEl.textContent = searchKeyword || _accountGroupFilter !== 'all'
+    ? `${visible.length}/${accounts.length}`
+    : accounts.length;
   if (accounts.length !== oldCount) {
     countEl.classList.add('badge-pulse');
     setTimeout(() => countEl.classList.remove('badge-pulse'), 600);
@@ -79,16 +123,18 @@ async function renderAccountList(highlightIds = null) {
   }
 
   if (visible.length === 0) {
+    const title = searchKeyword ? '未找到邮箱' : `${getAccountGroupLabel()}为空`;
+    const hint = searchKeyword ? '换个关键词试试' : (_accountGroupFilter === 'alias' ? '扫描订阅邮件后会自动导入别名邮箱' : '导入邮箱后会显示在这里');
     listEl.innerHTML = `<div class="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <p>未找到邮箱</p><p class="text-muted">换个关键词试试</p>
+      <p>${escapeHtml(title)}</p><p class="text-muted">${escapeHtml(hint)}</p>
     </div>`;
     return;
   }
 
   let html = `<div class="select-all-wrapper">
     <input type="checkbox" class="account-checkbox" id="selectAll" />
-    <label for="selectAll" style="cursor:pointer;">全选</label>
+    <label for="selectAll" style="cursor:pointer;">全选当前 ${visible.length} 个${_accountGroupFilter !== 'all' ? ` · ${escapeHtml(getAccountGroupLabel())}` : ''}</label>
     <button class="btn btn-ghost btn-small btn-danger-ghost" id="btnDeleteSelected" style="display:none;margin-left:auto;">删除选中</button>
   </div>`;
 
@@ -98,10 +144,13 @@ async function renderAccountList(highlightIds = null) {
     const aliasHtml = hasLoginAlias(acc)
       ? `<span class="account-login-email" title="${escapeAttr(loginEmail)}">ChatGPT: ${escapeHtml(loginEmail)}</span>`
       : '';
+    const groupBadge = hasLoginAlias(acc)
+      ? '<span class="account-type-badge alias">别名</span>'
+      : '<span class="account-type-badge primary">主邮箱</span>';
     html += `<div class="account-item ${isNew ? 'account-item-new' : ''}" data-id="${acc.id}" style="animation-delay:${isNew ? i * 0.05 : 0}s">
       <input type="checkbox" class="account-checkbox account-check" data-id="${acc.id}" />
       <span class="account-email-wrap" title="${escapeAttr(formatAccountTitle(acc))}">
-        <span class="account-email">${escapeHtml(acc.email)}</span>
+        <span class="account-email-line"><span class="account-email">${escapeHtml(acc.email)}</span>${groupBadge}</span>
         ${aliasHtml}
       </span>
       <button class="account-copy" data-email="${escapeAttr(acc.email)}" title="复制邮箱">
@@ -236,11 +285,21 @@ async function exportAccounts() {
   }
 }
 
+function getVisibleAccountIds() {
+  return getFilteredAccounts(_cachedAccounts).map(account => account.id);
+}
+
 function getSelectedOrAllMailboxIds() {
   const selected = getSelectedAccountIds();
-  if (selected.length > 0) return selected;
-  return _cachedAccounts
-    .filter(account => !hasLoginAlias(account))
+  if (selected.length > 0) {
+    const selectedIdSet = new Set(selected);
+    return _cachedAccounts
+      .filter(account => selectedIdSet.has(account.id) && getAccountGroup(account) === 'primary')
+      .map(account => account.id);
+  }
+
+  return getFilteredAccounts(_cachedAccounts)
+    .filter(account => getAccountGroup(account) === 'primary')
     .map(account => account.id);
 }
 
@@ -306,7 +365,7 @@ function renderAliasDiscoveryErrors(errors) {
 async function discoverAliasesFromPlanEmails() {
   const ids = getSelectedOrAllMailboxIds();
   if (ids.length === 0) {
-    showToast('请先导入至少一个主邮箱账号', 'warning');
+    showToast('请先选择主邮箱，别名邮箱不需要扫描订阅邮件', 'warning');
     return;
   }
 
@@ -512,6 +571,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 搜索
   document.getElementById('accountSearch').addEventListener('input', () => renderAccountList());
+  document.querySelectorAll('.account-group-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _accountGroupFilter = btn.dataset.accountGroup || 'all';
+      renderAccountList();
+    });
+  });
 
   // 清空全部
   document.getElementById('btnClearAll').addEventListener('click', async () => {

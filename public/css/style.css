@@ -285,6 +285,42 @@ body {
 }
 .account-search-input::placeholder { color: var(--text-muted); }
 
+.account-group-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.account-group-tab {
+  min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 6px 8px; border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text-secondary);
+  font-family: inherit; font-size: 0.74rem; font-weight: 700;
+  cursor: pointer; transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.account-group-tab span {
+  min-width: 18px; padding: 1px 5px; border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--text-muted); text-align: center;
+  font-size: 0.66rem;
+}
+.account-group-tab:hover {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-primary);
+}
+.account-group-tab.active {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--accent);
+}
+.account-group-tab.active span {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent);
+}
+
 /* --- Badge --- */
 .badge {
   background: var(--accent-bg); color: var(--accent);
@@ -465,6 +501,10 @@ body {
   display: flex; flex-direction: column; gap: 1px;
 }
 
+.account-email-line {
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0;
+}
 .account-email {
   font-size: 0.85rem; color: var(--text-primary); flex: 1;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -472,6 +512,22 @@ body {
 .account-login-email {
   font-size: 0.7rem; color: var(--accent);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.account-type-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.account-type-badge.primary {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+.account-type-badge.alias {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent);
 }
 
 .account-copy, .account-delete { opacity: 0; transition: var(--transition-fast); flex-shrink: 0; }

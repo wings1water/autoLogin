@@ -79,6 +79,12 @@
             <input type="text" id="accountSearch" class="account-search-input" placeholder="搜索邮箱" autocomplete="off" />
           </div>
 
+          <div class="account-group-tabs" id="accountGroupTabs">
+            <button class="account-group-tab active" data-account-group="all">全部 <span id="accountGroupAll">0</span></button>
+            <button class="account-group-tab" data-account-group="primary">主邮箱 <span id="accountGroupPrimary">0</span></button>
+            <button class="account-group-tab" data-account-group="alias">别名邮箱 <span id="accountGroupAlias">0</span></button>
+          </div>
+
           <div class="import-section">
             <button class="btn btn-primary btn-full" id="btnOpenImport">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>

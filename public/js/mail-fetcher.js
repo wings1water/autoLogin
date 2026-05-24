@@ -264,11 +264,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnFetchAll').addEventListener('click', async () => {
     const fullAccounts = await loadFullAccounts();
-    if (fullAccounts.length === 0) {
-      showToast('请先导入邮箱', 'warning');
+    const visibleIds = typeof getVisibleAccountIds === 'function' ? getVisibleAccountIds() : fullAccounts.map(a => a.id);
+    const visibleIdSet = new Set(visibleIds);
+    const targets = fullAccounts.filter(a => visibleIdSet.has(a.id));
+    if (targets.length === 0) {
+      showToast('当前分组没有可取件邮箱', 'warning');
       return;
     }
-    startFetch(fullAccounts);
+    startFetch(targets);
   });
 });
 
