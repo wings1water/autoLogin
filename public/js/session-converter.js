@@ -1,6 +1,6 @@
 /**
  * Session 转换模块
- * 前端版本的 GPTSession2CPAandSub2API 转换器
+ * 前端版本的 Session 转换器
  */
 
 let _currentFormat = 'cpa';
@@ -52,7 +52,7 @@ function normalizeSyntheticCodexIdToken(token) {
 function extractSessionInfo(session) {
   const info = {
     email: '', accessToken: '', sessionToken: '', idToken: '',
-    accountId: '', userId: '', planType: '', isPlus: false,
+    accountId: '', userId: '', organizationId: '', planType: '', isPlus: false,
     expiresAt: '', expiresAtUnix: 0,
   };
 
@@ -85,6 +85,7 @@ function extractSessionInfo(session) {
     if (!info.email) info.email = claims.email || profile.email || auth.email || '';
     if (!info.accountId) info.accountId = auth.chatgpt_account_id || auth.account_id || '';
     if (!info.userId) info.userId = auth.chatgpt_user_id || auth.user_id || claims.sub || '';
+    if (!info.organizationId) info.organizationId = auth.organization_id || '';
     if (!info.planType) info.planType = auth.chatgpt_plan_type || auth.plan_type || '';
     if (claims.exp) {
       info.expiresAtUnix = claims.exp;
@@ -117,17 +118,7 @@ function parseSessionInput(text) {
 // ==================== 转换函数 ====================
 function convertToCPA(sessions) {
   return sessions.map(info => {
-    let idToken = normalizeSyntheticCodexIdToken(info.idToken);
-    if (!idToken && info.accessToken) {
-      idToken = buildSyntheticCodexIdToken(
-        info.email,
-        info.accountId,
-        info.planType,
-        info.userId,
-        info.expiresAt || info.expiresAtUnix
-      );
-    }
-
+    const idToken = resolveCodexIdToken(info);
     const expired = info.expiresAt || unixToIsoSeconds(info.expiresAtUnix);
 
     return {
@@ -135,6 +126,7 @@ function convertToCPA(sessions) {
       email: info.email,
       account_id: info.accountId,
       chatgpt_account_id: info.accountId,
+      organization_id: info.organizationId,
       plan_type: info.planType,
       chatgpt_plan_type: info.planType,
       id_token: idToken,
@@ -144,6 +136,34 @@ function convertToCPA(sessions) {
       last_refresh: new Date().toISOString(),
       expired,
       disabled: false,
+      id_token_synthetic: isSyntheticCodexIdToken(idToken) || (!info.idToken && Boolean(idToken)),
+    };
+  });
+}
+
+function convertToCockpit(sessions) {
+  const exportedAt = new Date().toISOString();
+
+  return sessions.map(info => {
+    const idToken = resolveCodexIdToken(info);
+    const expired = info.expiresAt || unixToIsoSeconds(info.expiresAtUnix);
+
+    return {
+      type: 'codex',
+      auth_mode: 'oauth',
+      email: info.email,
+      name: info.email,
+      account_id: info.accountId,
+      organization_id: info.organizationId,
+      user_id: info.userId,
+      plan_type: info.planType,
+      id_token: idToken,
+      access_token: info.accessToken,
+      refresh_token: '',
+      session_token: info.sessionToken,
+      last_refresh: exportedAt,
+      expired,
+      source: 'chatgpt_session_forge',
       id_token_synthetic: isSyntheticCodexIdToken(idToken) || (!info.idToken && Boolean(idToken)),
     };
   });
@@ -167,12 +187,16 @@ function getEmailKey(email) {
     .replace(/^_+|_+$/g, '') || 'account';
 }
 
-function buildSyntheticCodexIdToken(email, accountId, planType, userId, expires) {
+function buildSyntheticCodexIdToken(email, accountId, planType, userId, expires, organizationId = '') {
   if (!accountId) return '';
   const now = Math.trunc(Date.now() / 1000);
   const exp = Number(expires) || Math.trunc(Date.parse(expires || '') / 1000) || now + 90 * 24 * 60 * 60;
-  const authInfo = { chatgpt_account_id: accountId };
+  const authInfo = {
+    account_id: accountId,
+    chatgpt_account_id: accountId,
+  };
   if (planType) authInfo.chatgpt_plan_type = planType;
+  if (organizationId) authInfo.organization_id = organizationId;
   if (userId) {
     authInfo.chatgpt_user_id = userId;
     authInfo.user_id = userId;
@@ -184,6 +208,21 @@ function buildSyntheticCodexIdToken(email, accountId, planType, userId, expires)
   };
   if (email) payload.email = email;
   return `${base64UrlJson({ alg: 'none', typ: 'JWT', cpa_synthetic: true })}.${base64UrlJson(payload)}.`;
+}
+
+function resolveCodexIdToken(info) {
+  let idToken = normalizeSyntheticCodexIdToken(info.idToken);
+  if (!idToken && info.accessToken) {
+    idToken = buildSyntheticCodexIdToken(
+      info.email,
+      info.accountId,
+      info.planType,
+      info.userId,
+      info.expiresAt || info.expiresAtUnix,
+      info.organizationId
+    );
+  }
+  return idToken;
 }
 
 function base64UrlJson(value) {
@@ -269,6 +308,8 @@ function doConvert() {
   let result;
   if (_currentFormat === 'sub2api') {
     result = convertToSub2API(_parsedSessions);
+  } else if (_currentFormat === 'cockpit') {
+    result = convertToCockpit(_parsedSessions);
   } else {
     result = convertToCPA(_parsedSessions);
   }

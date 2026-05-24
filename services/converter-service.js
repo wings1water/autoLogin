@@ -1,7 +1,7 @@
 /**
  * Session 格式转换服务
- * 将 ChatGPT session JSON 转换为 CPA / sub2api 格式
- * 移植自 GPTSession2CPAandSub2API 项目
+ * 将 ChatGPT session JSON 转换为 CPA / sub2api / Cockpit 格式
+ * Cockpit 导出格式参考 jlcodes99/cockpit-tools 的 Codex 导入逻辑
  */
 
 /**
@@ -72,6 +72,7 @@ function extractSessionInfo(session) {
     idToken: '',
     accountId: '',
     userId: '',
+    organizationId: '',
     planType: '',
     isPlus: false,
     expiresAt: '',
@@ -112,6 +113,7 @@ function extractSessionInfo(session) {
     if (!info.email) info.email = claims.email || profile.email || auth.email || '';
     if (!info.accountId) info.accountId = auth.chatgpt_account_id || auth.account_id || '';
     if (!info.userId) info.userId = auth.chatgpt_user_id || auth.user_id || claims.sub || '';
+    if (!info.organizationId) info.organizationId = auth.organization_id || '';
     if (!info.planType) info.planType = auth.chatgpt_plan_type || auth.plan_type || '';
 
     if (claims.exp) {
@@ -145,12 +147,16 @@ function getEmailKey(email) {
     .replace(/^_+|_+$/g, '') || 'account';
 }
 
-function buildSyntheticCodexIdToken(email, accountId, planType, userId, expires) {
+function buildSyntheticCodexIdToken(email, accountId, planType, userId, expires, organizationId = '') {
   if (!accountId) return '';
   const now = Math.trunc(Date.now() / 1000);
   const exp = Number(expires) || Math.trunc(Date.parse(expires || '') / 1000) || now + 90 * 24 * 60 * 60;
-  const authInfo = { chatgpt_account_id: accountId };
+  const authInfo = {
+    account_id: accountId,
+    chatgpt_account_id: accountId,
+  };
   if (planType) authInfo.chatgpt_plan_type = planType;
+  if (organizationId) authInfo.organization_id = organizationId;
   if (userId) {
     authInfo.chatgpt_user_id = userId;
     authInfo.user_id = userId;
@@ -164,6 +170,21 @@ function buildSyntheticCodexIdToken(email, accountId, planType, userId, expires)
   const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT', cpa_synthetic: true })).toString('base64url');
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${header}.${body}.`;
+}
+
+function resolveCodexIdToken(info) {
+  let idToken = normalizeSyntheticCodexIdToken(info.idToken);
+  if (!idToken && info.accessToken) {
+    idToken = buildSyntheticCodexIdToken(
+      info.email,
+      info.accountId,
+      info.planType,
+      info.userId,
+      info.expiresAt || info.expiresAtUnix,
+      info.organizationId
+    );
+  }
+  return idToken;
 }
 
 /**
@@ -207,17 +228,7 @@ function parseSessionInput(text) {
 function toCPA(sessions) {
   return sessions.map(info => {
     // 构建 id_token（如缺失则生成占位 JWT claims）
-    let idToken = normalizeSyntheticCodexIdToken(info.idToken);
-    if (!idToken && info.accessToken) {
-      idToken = buildSyntheticCodexIdToken(
-        info.email,
-        info.accountId,
-        info.planType,
-        info.userId,
-        info.expiresAt || info.expiresAtUnix
-      );
-    }
-
+    const idToken = resolveCodexIdToken(info);
     const expired = info.expiresAt || unixToIsoSeconds(info.expiresAtUnix);
 
     return {
@@ -225,6 +236,7 @@ function toCPA(sessions) {
       email: info.email,
       account_id: info.accountId,
       chatgpt_account_id: info.accountId,
+      organization_id: info.organizationId,
       plan_type: info.planType,
       chatgpt_plan_type: info.planType,
       id_token: idToken,
@@ -234,6 +246,40 @@ function toCPA(sessions) {
       last_refresh: new Date().toISOString(),
       expired,
       disabled: false,
+      id_token_synthetic: isSyntheticCodexIdToken(idToken) || (!info.idToken && Boolean(idToken)),
+    };
+  });
+}
+
+/**
+ * 转换为 Cockpit Tools 可导入格式
+ *
+ * jlcodes99/cockpit-tools 支持扁平的 id_token/access_token/session_token/account_id JSON，
+ * 数组可一次导入多个账号。这里保留 session_token，让 refresh_token 为空时 Cockpit 使用它做回退。
+ */
+function toCockpit(sessions) {
+  const exportedAt = new Date().toISOString();
+
+  return sessions.map(info => {
+    const idToken = resolveCodexIdToken(info);
+    const expired = info.expiresAt || unixToIsoSeconds(info.expiresAtUnix);
+
+    return {
+      type: 'codex',
+      auth_mode: 'oauth',
+      email: info.email,
+      name: info.email,
+      account_id: info.accountId,
+      organization_id: info.organizationId,
+      user_id: info.userId,
+      plan_type: info.planType,
+      id_token: idToken,
+      access_token: info.accessToken,
+      refresh_token: '',
+      session_token: info.sessionToken,
+      last_refresh: exportedAt,
+      expired,
+      source: 'chatgpt_session_forge',
       id_token_synthetic: isSyntheticCodexIdToken(idToken) || (!info.idToken && Boolean(idToken)),
     };
   });
@@ -289,4 +335,5 @@ module.exports = {
   parseSessionInput,
   toCPA,
   toSub2API,
+  toCockpit,
 };

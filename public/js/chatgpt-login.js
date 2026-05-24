@@ -344,9 +344,10 @@ async function exportSessions() {
       } else {
         const json = JSON.stringify(data.data, null, 2);
         downloadTextFile(`sessions-${format}-${new Date().toISOString().slice(0, 10)}.json`, json);
-        copyText(json, `已导出 ${data.count} 个 ${format.toUpperCase()} 账号`);
+        const label = format === 'cockpit' ? 'Cockpit' : format.toUpperCase();
+        copyText(json, `已导出 ${data.count} 个 ${label} 账号`);
       }
-      addLog(`导出 ${data.count} 个 ${format.toUpperCase()} 账号`, 'success');
+      addLog(`导出 ${data.count} 个 ${format === 'cockpit' ? 'Cockpit' : format.toUpperCase()} 账号`, 'success');
     } else {
       showToast(data.error || '导出失败', 'warning');
     }

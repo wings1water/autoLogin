@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-一个本地运行的 ChatGPT 会话管理工具，用于导入 Outlook 账号、自动获取 OpenAI 邮箱验证码、批量完成 ChatGPT 登录，并导出 CPA / sub2api 可用的凭证 JSON。
+一个本地运行的 ChatGPT 会话管理工具，用于导入 Outlook 账号、自动获取 OpenAI 邮箱验证码、批量完成 ChatGPT 登录，并导出 CPA / sub2api / Cockpit 可用的凭证 JSON。
 
 这个项目适合需要集中管理多个 ChatGPT Web Session 的本地工作流。所有账号数据、登录结果和导出文件都保存在本机，不需要外部数据库。
 
@@ -16,6 +16,7 @@
 - 自动识别账号停用 / 删除类错误
 - CPA 导出：一个账号一个 JSON 文件
 - sub2api 导出：生成包含 `accounts` 数组的聚合 JSON
+- Cockpit 导出：生成 `cockpit-tools` 可直接导入的扁平 Codex token JSON 数组
 - 支持粘贴原始 `https://chatgpt.com/api/auth/session` JSON 并转换
 - 支持通过环境变量或 Windows 系统代理配置后端出站代理
 
@@ -95,6 +96,7 @@ HTTPS_PROXY=http://127.0.0.1:7897 npm start
 6. 登录成功后，选择成功账号并导出：
    - `CPA`：每个账号导出为一个 JSON 文件
    - `sub2api`：导出为一个聚合 JSON 文件
+   - `Cockpit`：导出为一个 JSON 数组文件，可导入 [jlcodes99/cockpit-tools](https://github.com/jlcodes99/cockpit-tools)
 
 ## CPA 导出格式
 
@@ -135,6 +137,35 @@ sub2api 导出为聚合结构：
 
 每个账号会包含 OAuth 凭证、账号 ID、用户 ID、套餐类型、过期时间和额外元数据。
 
+## Cockpit 导出格式
+
+Cockpit 导出采用 `cockpit-tools` 当前导入逻辑支持的扁平 Codex token JSON 数组。结构示例：
+
+```json
+[
+  {
+    "type": "codex",
+    "auth_mode": "oauth",
+    "email": "user@example.com",
+    "name": "user@example.com",
+    "account_id": "00000000-0000-4000-9000-000000000000",
+    "organization_id": "",
+    "user_id": "user-example",
+    "plan_type": "free",
+    "id_token": "header.payload.",
+    "access_token": "real-access-token",
+    "refresh_token": "",
+    "session_token": "real-session-token",
+    "last_refresh": "2026-05-24T00:00:00.000Z",
+    "expired": "2026-08-22T00:00:00.000Z",
+    "source": "chatgpt_session_forge",
+    "id_token_synthetic": true
+  }
+]
+```
+
+`cockpit-tools` 会读取 `id_token`、`access_token`、`account_id`，并在 `refresh_token` 为空时使用 `session_token` 作为回退字段。
+
 ## 本地数据
 
 运行时账号数据保存在：
@@ -159,7 +190,7 @@ logs/
 - OAuth refresh token
 - ChatGPT access token
 - ChatGPT session token
-- 导出的 CPA / sub2api 凭证文件
+- 导出的 CPA / sub2api / Cockpit 凭证文件
 
 不要提交运行数据、日志、导出的 JSON / ZIP 文件，或任何包含 token 的截图。公开仓库前请务必检查：
 
