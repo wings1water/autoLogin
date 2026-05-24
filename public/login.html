@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 | ChatGPT 凭证管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css?v=20260524-app-auth">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-panel glass-panel">
+      <div class="login-brand">
+        <div class="app-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="app-title">ChatGPT 凭证管理</h1>
+          <p class="app-subtitle">登录后继续管理账号</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="app-login-form">
+        <label>
+          <span>用户名</span>
+          <input class="input" id="loginUsername" name="username" autocomplete="username" value="admin" required>
+        </label>
+        <label>
+          <span>密码</span>
+          <input class="input" id="loginPassword" name="password" type="password" autocomplete="current-password" required autofocus>
+        </label>
+        <div class="login-error" id="loginError"></div>
+        <button class="btn btn-primary btn-full" id="btnAppLogin" type="submit">登录</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const errorEl = document.getElementById('loginError');
+    const btn = document.getElementById('btnAppLogin');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('loginUsername').value,
+            password: document.getElementById('loginPassword').value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || '登录失败');
+        window.location.href = '/';
+      } catch (err) {
+        errorEl.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '登录';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -65,6 +65,53 @@ body {
   line-height: 1.6;
 }
 
+.login-page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  overflow: auto;
+  padding: 24px;
+}
+
+.login-shell {
+  width: min(420px, 100%);
+}
+
+.login-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 26px;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.login-error {
+  min-height: 18px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--error);
+}
+
 /* --- 动态背景 --- */
 .bg-animation {
   position: fixed; top: 0; left: 0;

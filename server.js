@@ -4,10 +4,12 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { ProxyAgent, setGlobalDispatcher } = require('undici');
 const config = require('./config');
+const authService = require('./services/app-auth-service');
 
 setupOutboundProxy();
 
 const app = express();
+authService.ensureAuthState();
 
 function setupOutboundProxy() {
   const proxyUrl = resolveProxyUrl(config.proxy);
@@ -62,6 +64,17 @@ function maskProxyUrl(value) {
 // ==================== 中间件 ====================
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.use('/api/auth', require('./routes/auth'));
+app.get('/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+app.use((req, res, next) => {
+  if (req.path === '/favicon.ico') return next();
+  if (req.path.startsWith('/css/') || req.path.startsWith('/js/')) return next();
+  if (req.path === '/login.html' || req.path.startsWith('/api/auth/')) return next();
+  return authService.requireAuth(req, res, next);
+});
 
 // 静态文件
 app.use(express.static(path.join(__dirname, 'public'), {

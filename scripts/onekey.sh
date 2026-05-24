@@ -11,10 +11,12 @@ if [ -z "${INSTALL_DIR:-}" ]; then
     INSTALL_DIR="${HOME}/${APP_NAME}"
   fi
 fi
-PORT="${PORT:-3000}"
+PORT="${PORT:-8866}"
+APP_USERNAME="${APP_USERNAME:-admin}"
+APP_PASSWORD="${APP_PASSWORD:-}"
 SETUP_NGINX="${SETUP_NGINX:-1}"
 DOMAIN="${DOMAIN:-_}"
-ENABLE_BASIC_AUTH="${ENABLE_BASIC_AUTH:-1}"
+ENABLE_BASIC_AUTH="${ENABLE_BASIC_AUTH:-0}"
 BASIC_AUTH_USER="${BASIC_AUTH_USER:-admin}"
 BASIC_AUTH_PASS="${BASIC_AUTH_PASS:-}"
 
@@ -133,9 +135,9 @@ start_or_restart_pm2() {
   cd "$INSTALL_DIR"
 
   if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
-    PORT="$PORT" pm2 restart "$APP_NAME" --update-env
+    PORT="$PORT" APP_USERNAME="$APP_USERNAME" APP_PASSWORD="$APP_PASSWORD" pm2 restart "$APP_NAME" --update-env
   else
-    PORT="$PORT" pm2 start server.js --name "$APP_NAME"
+    PORT="$PORT" APP_USERNAME="$APP_USERNAME" APP_PASSWORD="$APP_PASSWORD" pm2 start server.js --name "$APP_NAME"
   fi
 
   pm2 save
@@ -172,6 +174,14 @@ write_nginx_config() {
     fi
     auth_lines="        auth_basic \"${APP_NAME}\";
         auth_basic_user_file ${auth_file};"
+  fi
+
+  if [ "$ENABLE_BASIC_AUTH" != "1" ]; then
+    local old_auth_file
+    old_auth_file="/etc/nginx/.htpasswd-${APP_NAME}"
+    if [ -f "$old_auth_file" ]; then
+      log "Nginx Basic Auth disabled; project login is used instead"
+    fi
   fi
 
   local tmp_conf
@@ -245,6 +255,10 @@ Common commands:
   pm2 logs ${APP_NAME}
   pm2 restart ${APP_NAME}
   pm2 stop ${APP_NAME}
+
+Login:
+  Username: ${APP_USERNAME}
+  Password: check PM2 logs on first startup, or set APP_PASSWORD before running this script.
 
 Run this same script again to upgrade.
 EOF

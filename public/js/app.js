@@ -38,12 +38,22 @@ document.addEventListener('DOMContentLoaded', () => {
     addLog('日志已清空', 'info');
   });
 
+  document.getElementById('btnLogout')?.addEventListener('click', logoutApp);
+
   // 启动 SSE 连接
   setupSSE();
   setupEventReplayPoll();
 
   addLog('系统初始化完成', 'success');
 });
+
+async function logoutApp() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } finally {
+    window.location.href = '/login.html';
+  }
+}
 
 // ==================== SSE 连接 ====================
 let _eventSource = null;

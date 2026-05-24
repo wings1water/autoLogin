@@ -58,13 +58,15 @@ REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git DOMAIN
 REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git SETUP_NGINX=0 bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
 ```
 
-默认会给 Nginx 加 Basic Auth。可以指定账号密码：
+项目自带登录功能，默认端口为 `8866`。首次启动如果没有设置 `APP_PASSWORD`，程序会自动生成密码并打印到 PM2 日志中。也可以安装时指定：
 
 ```bash
-REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git BASIC_AUTH_USER=admin BASIC_AUTH_PASS='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
+REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git APP_USERNAME=admin APP_PASSWORD='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
 ```
 
-> 重要：本项目会保存邮箱令牌和 ChatGPT session，不建议无密码公开到公网。
+如果要继续使用 Nginx Basic Auth，可以额外设置 `ENABLE_BASIC_AUTH=1`。
+
+> 重要：本项目会保存邮箱令牌和 ChatGPT session，请务必设置强密码。
 
 ## 安装
 
@@ -84,7 +86,7 @@ npm start
 http://localhost:3000
 ```
 
-默认端口是 `3000`。也可以指定端口：
+默认端口是 `8866`。也可以指定端口：
 
 ```bash
 PORT=8080 npm start

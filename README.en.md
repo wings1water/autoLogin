@@ -55,13 +55,15 @@ Skip Nginx setup:
 REPO_URL=https://github.com/<your-github-user>/<your-repo>.git SETUP_NGINX=0 bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
 ```
 
-Nginx Basic Auth is enabled by default. You can set credentials:
+The app now has built-in login and uses port `8866` by default. If `APP_PASSWORD` is not set on first startup, the app generates one and prints it in the PM2 logs. You can set it during install:
 
 ```bash
-REPO_URL=https://github.com/<your-github-user>/<your-repo>.git BASIC_AUTH_USER=admin BASIC_AUTH_PASS='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
+REPO_URL=https://github.com/<your-github-user>/<your-repo>.git APP_USERNAME=admin APP_PASSWORD='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
 ```
 
-> Important: this app stores mailbox tokens and ChatGPT sessions. Do not expose it publicly without authentication.
+Set `ENABLE_BASIC_AUTH=1` only if you also want Nginx Basic Auth.
+
+> Important: this app stores mailbox tokens and ChatGPT sessions. Use a strong password.
 
 ## Install
 
@@ -81,7 +83,7 @@ Then open:
 http://localhost:3000
 ```
 
-The default port is `3000`. You can override it:
+The default port is `8866`. You can override it:
 
 ```bash
 PORT=8080 npm start

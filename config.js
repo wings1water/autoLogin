@@ -3,10 +3,19 @@
  */
 module.exports = {
   // 服务器端口
-  port: process.env.PORT || 3000,
+  port: process.env.PORT || 8866,
 
   // 数据文件路径
   dataFile: './data/accounts.json',
+
+  // 项目登录配置。首次启动未设置 APP_PASSWORD 时会自动生成密码并写入 data/app-auth.json。
+  authFile: './data/app-auth.json',
+  appAuth: {
+    username: process.env.APP_USERNAME || 'admin',
+    password: process.env.APP_PASSWORD || '',
+    cookieName: 'session_forge_auth',
+    sessionTtlMs: 7 * 24 * 60 * 60 * 1000,
+  },
 
   // 并发控制
   concurrency: 8,
