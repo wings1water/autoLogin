@@ -4,6 +4,7 @@
 module.exports = {
   // 服务器端口
   port: process.env.PORT || 8866,
+  host: process.env.HOST || '0.0.0.0',
 
   // 数据文件路径
   dataFile: './data/accounts.json',

@@ -71,6 +71,8 @@ REPO_URL=https://github.com/<your-github-user>/<your-repo>.git APP_USERNAME=admi
 
 By default, the script does not configure Nginx and does not set Nginx Basic Auth. Set `ENABLE_BASIC_AUTH=1` only together with `SETUP_NGINX=1` if you also want Nginx Basic Auth.
 
+On cloud servers, the app binds to `0.0.0.0:8866` by default, so the public access URL is `http://SERVER_PUBLIC_IP:8866`.
+
 > Important: this app stores mailbox tokens and ChatGPT sessions. Use a strong password.
 
 ## Install

@@ -166,12 +166,13 @@ app.use((err, req, res, next) => {
 });
 
 // ==================== 启动服务 ====================
-app.listen(config.port, () => {
+app.listen(config.port, config.host, () => {
   console.log('');
   console.log('╔══════════════════════════════════════════╗');
   console.log('║   ChatGPT 自动登录凭证管理系统          ║');
   console.log('║                                          ║');
   console.log(`║   🌐 http://localhost:${config.port}              ║`);
+  console.log(`║   📡 ${config.host}:${config.port}                 ║`);
   console.log('║                                          ║');
   console.log('║   功能：                                 ║');
   console.log('║   📬 Outlook 双协议取件                  ║');

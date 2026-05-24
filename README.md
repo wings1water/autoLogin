@@ -74,6 +74,8 @@ REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git APP_US
 
 默认不再配置 Nginx，也不会设置 Nginx Basic Auth。只有在 `SETUP_NGINX=1` 时，才可以额外设置 `ENABLE_BASIC_AUTH=1` 继续使用 Nginx Basic Auth。
 
+云服务器默认监听 `0.0.0.0:8866`，因此公网访问地址就是 `http://服务器公网IP:8866`。
+
 > 重要：本项目会保存邮箱令牌和 ChatGPT session，请务必设置强密码。
 
 ## 安装

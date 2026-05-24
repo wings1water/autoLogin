@@ -12,6 +12,7 @@ if [ -z "${INSTALL_DIR:-}" ]; then
   fi
 fi
 PORT="${PORT:-8866}"
+HOST="${HOST:-0.0.0.0}"
 APP_USERNAME="${APP_USERNAME:-admin}"
 APP_PASSWORD="${APP_PASSWORD:-}"
 SETUP_NGINX="${SETUP_NGINX:-0}"
@@ -135,9 +136,9 @@ start_or_restart_pm2() {
   cd "$INSTALL_DIR"
 
   if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
-    PORT="$PORT" APP_USERNAME="$APP_USERNAME" APP_PASSWORD="$APP_PASSWORD" pm2 restart "$APP_NAME" --update-env
+    HOST="$HOST" PORT="$PORT" APP_USERNAME="$APP_USERNAME" APP_PASSWORD="$APP_PASSWORD" pm2 restart "$APP_NAME" --update-env
   else
-    PORT="$PORT" APP_USERNAME="$APP_USERNAME" APP_PASSWORD="$APP_PASSWORD" pm2 start server.js --name "$APP_NAME"
+    HOST="$HOST" PORT="$PORT" APP_USERNAME="$APP_USERNAME" APP_PASSWORD="$APP_PASSWORD" pm2 start server.js --name "$APP_NAME"
   fi
 
   pm2 save
@@ -265,6 +266,7 @@ Done.
 
 App directory: ${INSTALL_DIR}
 PM2 app name: ${APP_NAME}
+Bind address: ${HOST}:${PORT}
 Local URL: http://127.0.0.1:${PORT}
 Public URL: ${public_url}
 
