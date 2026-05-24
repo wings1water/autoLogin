@@ -43,16 +43,24 @@ Run it again to upgrade. The script pulls the latest code, updates dependencies,
 
 If you cloned someone else's repository, fork it or create your own repository first, then push your local changes there. Otherwise the server cannot download this script or your local changes.
 
+By default, the app uses its built-in login page and direct access on port `8866`:
+
+```text
+http://SERVER_PUBLIC_IP:8866
+```
+
+If UFW is active, the script allows `8866/tcp` automatically. You still need to allow TCP `8866` in your cloud provider firewall / security group.
+
 Common options:
 
 ```bash
-REPO_URL=https://github.com/<your-github-user>/<your-repo>.git DOMAIN=your-domain.com PORT=3000 bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
+REPO_URL=https://github.com/<your-github-user>/<your-repo>.git PORT=8866 bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
 ```
 
-Skip Nginx setup:
+Enable Nginx reverse proxy for port 80 only when you need it:
 
 ```bash
-REPO_URL=https://github.com/<your-github-user>/<your-repo>.git SETUP_NGINX=0 bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
+REPO_URL=https://github.com/<your-github-user>/<your-repo>.git SETUP_NGINX=1 DOMAIN=your-domain.com bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
 ```
 
 The app now has built-in login and uses port `8866` by default. If `APP_PASSWORD` is not set on first startup, the app generates one and prints it in the PM2 logs. You can set it during install:
@@ -61,7 +69,7 @@ The app now has built-in login and uses port `8866` by default. If `APP_PASSWORD
 REPO_URL=https://github.com/<your-github-user>/<your-repo>.git APP_USERNAME=admin APP_PASSWORD='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<your-github-user>/<your-repo>/master/scripts/onekey.sh)
 ```
 
-Set `ENABLE_BASIC_AUTH=1` only if you also want Nginx Basic Auth.
+By default, the script does not configure Nginx and does not set Nginx Basic Auth. Set `ENABLE_BASIC_AUTH=1` only together with `SETUP_NGINX=1` if you also want Nginx Basic Auth.
 
 > Important: this app stores mailbox tokens and ChatGPT sessions. Use a strong password.
 
@@ -80,7 +88,7 @@ npm start
 Then open:
 
 ```text
-http://localhost:3000
+http://localhost:8866
 ```
 
 The default port is `8866`. You can override it:

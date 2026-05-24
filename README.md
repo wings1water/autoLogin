@@ -46,16 +46,24 @@ REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git bash <
 
 如果你是从别人的仓库 clone 的，请先 fork 或创建自己的仓库，并把当前修改推送到自己的仓库。否则服务器会拉不到这个一键脚本和你的本地改动。
 
+默认访问方式为项目自带登录页 + `8866` 端口直连：
+
+```text
+http://服务器公网IP:8866
+```
+
+服务器如果启用了 UFW，脚本会自动放行 `8866/tcp`。云服务商控制台里的防火墙 / 安全组也需要放行 TCP `8866`。
+
 常用自定义参数：
 
 ```bash
-REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git DOMAIN=your-domain.com PORT=3000 bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
+REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git PORT=8866 bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
 ```
 
-如果只想开放端口、不配置 Nginx：
+如果需要继续通过 Nginx 反向代理访问 80 端口，可以显式开启：
 
 ```bash
-REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git SETUP_NGINX=0 bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
+REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git SETUP_NGINX=1 DOMAIN=your-domain.com bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
 ```
 
 项目自带登录功能，默认端口为 `8866`。首次启动如果没有设置 `APP_PASSWORD`，程序会自动生成密码并打印到 PM2 日志中。也可以安装时指定：
@@ -64,7 +72,7 @@ REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git SETUP_
 REPO_URL=https://github.com/<你的GitHub用户名>/<你的仓库名>.git APP_USERNAME=admin APP_PASSWORD='your-strong-password' bash <(curl -fsSL https://raw.githubusercontent.com/<你的GitHub用户名>/<你的仓库名>/master/scripts/onekey.sh)
 ```
 
-如果要继续使用 Nginx Basic Auth，可以额外设置 `ENABLE_BASIC_AUTH=1`。
+默认不再配置 Nginx，也不会设置 Nginx Basic Auth。只有在 `SETUP_NGINX=1` 时，才可以额外设置 `ENABLE_BASIC_AUTH=1` 继续使用 Nginx Basic Auth。
 
 > 重要：本项目会保存邮箱令牌和 ChatGPT session，请务必设置强密码。
 
@@ -83,7 +91,7 @@ npm start
 然后打开：
 
 ```text
-http://localhost:3000
+http://localhost:8866
 ```
 
 默认端口是 `8866`。也可以指定端口：

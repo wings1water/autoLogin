@@ -14,7 +14,7 @@ fi
 PORT="${PORT:-8866}"
 APP_USERNAME="${APP_USERNAME:-admin}"
 APP_PASSWORD="${APP_PASSWORD:-}"
-SETUP_NGINX="${SETUP_NGINX:-1}"
+SETUP_NGINX="${SETUP_NGINX:-0}"
 DOMAIN="${DOMAIN:-_}"
 ENABLE_BASIC_AUTH="${ENABLE_BASIC_AUTH:-0}"
 BASIC_AUTH_USER="${BASIC_AUTH_USER:-admin}"
@@ -147,6 +147,23 @@ start_or_restart_pm2() {
   fi
 }
 
+open_direct_port() {
+  [ "$SETUP_NGINX" != "1" ] || return 0
+
+  log "Using direct app access on port ${PORT}"
+  if need_cmd ufw && as_root ufw status | grep -qi '^Status: active'; then
+    as_root ufw allow "${PORT}/tcp" >/dev/null || true
+  fi
+
+  if need_cmd systemctl && systemctl is-active --quiet nginx 2>/dev/null; then
+    if [ -L "/etc/nginx/sites-enabled/${APP_NAME}" ]; then
+      log "Disabling old Nginx site for ${APP_NAME}; project login will protect the app"
+      as_root rm -f "/etc/nginx/sites-enabled/${APP_NAME}"
+      as_root nginx -t >/dev/null 2>&1 && as_root systemctl reload nginx || true
+    fi
+  fi
+}
+
 write_nginx_config() {
   [ "$SETUP_NGINX" = "1" ] || return 0
 
@@ -251,6 +268,8 @@ PM2 app name: ${APP_NAME}
 Local URL: http://127.0.0.1:${PORT}
 Public URL: ${public_url}
 
+If direct access is used, also allow TCP ${PORT} in your cloud firewall/security group.
+
 Common commands:
   pm2 logs ${APP_NAME}
   pm2 restart ${APP_NAME}
@@ -272,6 +291,7 @@ main() {
   ensure_runtime_data
   install_dependencies
   start_or_restart_pm2
+  open_direct_port
   write_nginx_config
   print_result
 }
